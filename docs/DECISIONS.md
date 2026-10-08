@@ -111,3 +111,14 @@ Fonte: `frameworks/base/core/java/com/android/internal/pm/pkg/component/` (branc
 
 - `atlas/data/java_lang.json` (102 tipos) é gerado pelo mesmo script da tabela de framework. A lista antiga, escrita à mão, é mantida em união, para código Java que não é Android.
 - `import android.webkit.*;` com **um único** import curinga resolve `WebViewClient` para `android.webkit.WebViewClient` quando esse tipo está na tabela gerada por `javap`. Com mais de um curinga, continua `unresolved`: um pacote desconhecido poderia ter um tipo com o mesmo nome.
+
+## D-019 · Arestas de Intent em campo separado (Fase 4)
+
+- **Contexto:** papéis (Fase 2), "herança completa" e estatísticas de relações percorrem `edges` assumindo herança.
+- **Decisão:** as arestas de Intent ficam em `payload.intentEdges` (`launches`, `sends_action`, `registers_receiver`), com `via`, `line`, `confidence` e, quando houver, `action`/`actions`/`component`. `edges` continua só com herança. A interface junta os dois conforme a camada escolhida (Herança, Intents ou Todas).
+- **Fluxo:** apenas dentro do método e em ordem de documento. Vale a última atribuição da variável antes da chamada, seguida das chamadas `setClass`/`setClassName`/`setComponent`/`setAction`/`setPackage` sobre ela. Builders encadeados (`new Intent(...).setAction(...)`) são seguidos. Não há sensibilidade a desvios (um `if/else` que atribui Intents diferentes fica com a última atribuição no texto) nem análise entre métodos.
+- **Confiança:** alvo `X.class` resolvido = `high`; nome de classe em string (`setClassName`) = `medium`; ação ligada a `intent-filter` do Manifest = `medium` (o Android pode escolher outro app, e filtros com categorias e dados não são comparados); `registerReceiver(new X(), ...)` = `high`, e por variável = `medium`.
+- **Nunca inventar alvo:** ação dinâmica, Intent vindo de outro método, classe fora das fontes ou ação sem filtro correspondente vão para `node.intents.unresolved`, com o motivo.
+- **Constantes:** `static final String` literais da própria classe, das classes que a envolvem e de outras classes do projeto (`Actions.GO`, resolvido pelos imports). O `javac` já embute constantes do framework como literais, e é isso que o JADX mostra.
+- **Marcadores:** `readsIntent` em classes com papel de componente que chamam `getIntent()`; `deepLinkHandler` em componentes com deep link no Manifest. São só marcadores, não análise de fluxo.
+- `PendingIntent.getActivity/getService/getBroadcast/getForegroundService` só contam quando o receptor é `PendingIntent`, o que evita confusão com `Fragment.getActivity()`.

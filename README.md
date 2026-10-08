@@ -59,6 +59,10 @@ A **confiança** não depende de um sistema de tipos:
 
 Receptores de outro tipo são descartados. O código de classes anônimas é atribuído à classe que o contém. Segredos aparecem sempre mascarados (`AKIA…[20 caracteres]`). Clicar num achado abre o código na linha, com a explicação da regra. **Não há análise de fluxo de dados**: são pistas para revisão manual.
 
+## Navegação por Intents
+
+O Atlas liga telas e componentes pelas chamadas de Intent: `startActivity`, `startService`, `bindService`, `sendBroadcast`, `PendingIntent.get*` e `registerReceiver`, com alvos por `X.class`, `setClassName`, `setComponent` ou ação implícita casada com os `intent-filter` do Manifest. O fluxo é **só dentro do método**, sem análise entre métodos. Intents que não dá para rastrear (ação dinâmica, Intent vindo de outro método) aparecem como "não resolvidos", com o motivo, e nunca viram uma aresta inventada. No mapa, escolha a camada **Herança**, **Intents** ou **Todas**.
+
 ## Explorar
 
 - **Busca**: localiza pelo nome da classe, nome completo, pacote ou caminho do arquivo. Atalho `/`.
