@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fictional demo manifest (apktool layout: next to the sources). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="br.exemplo.pedidos" android:versionCode="7" android:versionName="2.1.0">
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="30" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application android:allowBackup="true" android:usesCleartextTraffic="true">
+        <activity android:name=".ui.PedidoActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".ui.CheckoutActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="pedidos" android:host="checkout" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".ui.HistoricoActivity" android:exported="false" />
+    </application>
+</manifest>

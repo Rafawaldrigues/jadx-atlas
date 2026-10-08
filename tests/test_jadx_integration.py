@@ -3,10 +3,31 @@
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
 from atlas.indexer import Project
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from build_test_apk import build, find_sdk  # noqa: E402
+
+# Expected attack surface of tests/apk/testapp, checked by hand against `aapt dump xmltree` (docs/VALIDATION.md).
+EXPECTED_APK = {
+    "br.atlas.testapp.MainActivity": (True, "br.atlas.testapp.MainActivity"),
+    "br.atlas.testapp.DeepLinkActivity": (True, "br.atlas.testapp.DeepLinkActivity"),
+    "br.atlas.testapp.InternalActivity": (False, "br.atlas.testapp.InternalActivity"),
+    "br.atlas.testapp.ResourceActivity": ("unknown", "br.atlas.testapp.ResourceActivity"),
+    "br.atlas.testapp.AliasLauncher": (True, "br.atlas.testapp.InternalActivity"),
+    "br.atlas.testapp.SyncService": (True, "br.atlas.testapp.SyncService"),
+    "br.atlas.testapp.LocalService": (False, "br.atlas.testapp.LocalService"),
+    "br.atlas.testapp.BootReceiver": (True, "br.atlas.testapp.BootReceiver"),
+    "br.atlas.testapp.Outer.InnerReceiver": (True, "br.atlas.testapp.Outer.InnerReceiver"),
+    "br.atlas.testapp.MissingReceiver": (True, None),
+    "br.atlas.testapp.DataProvider": (True, "br.atlas.testapp.DataProvider"),
+    "br.atlas.testapp.LegacyProvider": (False, "br.atlas.testapp.LegacyProvider"),
+}
 
 
 @unittest.skipUnless(all(shutil.which(tool) for tool in ("javac", "jar", "jadx")), "Requer javac, jar e jadx")
@@ -44,6 +65,27 @@ public class Example extends Base<String> implements View, Serializable {
             self.assertIn(("sample.View", "extends", "sample.Root"), edges)
             code = project.source("sample.Example")
             self.assertIn("class Example", code["code"].splitlines()[code["line"] - 1])
+
+
+@unittest.skipUnless(shutil.which("javac") and shutil.which("jadx") and find_sdk(), "Requer javac, jadx e Android SDK")
+class ApkManifestIntegrationTests(unittest.TestCase):
+    def test_synthetic_apk_attack_surface(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            apk = build(root)["apk"]
+            result = subprocess.run(
+                ["jadx", "-q", "-d", str(root / "export"), apk], capture_output=True, text=True, timeout=180
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            project = Project(root / "export" / "sources")
+            manifest = project.payload["manifest"]
+            found = {c["name"]: (c["exported"], c["class"]) for c in manifest["components"]}
+            self.assertEqual(found, EXPECTED_APK)
+            resource = next(c for c in manifest["components"] if c["name"].endswith("ResourceActivity"))
+            self.assertIs(resource["exportedGuess"], True)
+            self.assertEqual(manifest["targetSdk"], 30)
+            self.assertIs(manifest["application"]["debuggable"]["value"], True)
+            self.assertEqual(project.payload["stats"]["deepLinks"], 2)
 
 
 if __name__ == "__main__":

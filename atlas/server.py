@@ -23,7 +23,7 @@ class State:
         self.cancel = threading.Event()
         self.status = {"busy": False, "done": 0, "total": 0, "message": "Pronto", "error": None, "revision": 0}
 
-    def start(self, path, demo=False):
+    def start(self, path, demo=False, manifest=None):
         with self.lock:
             if self.status["busy"]:
                 raise ValueError("Uma importação já está em andamento.")
@@ -36,7 +36,7 @@ class State:
 
         def work():
             try:
-                project = Project(path, progress, self.cancel.is_set, demo=demo)
+                project = Project(path, progress, self.cancel.is_set, demo=demo, manifest=manifest)
                 with self.lock:
                     if self.cancel.is_set():
                         raise Cancelled()
@@ -142,7 +142,10 @@ class Handler(SimpleHTTPRequestHandler):
                 root = body.get("path")
                 if not isinstance(root, str) or not root.strip():
                     raise ValueError("Informe o caminho da pasta exportada.")
-                self.state.start(root.strip())
+                manifest = body.get("manifest")
+                if manifest is not None and not isinstance(manifest, str):
+                    raise ValueError("O campo manifest deve ser um caminho.")
+                self.state.start(root.strip(), manifest=(manifest or "").strip() or None)
             elif path == "/api/demo":
                 self.state.start(BASE / "examples" / "pedidos", demo=True)
             elif path == "/api/cancel":
@@ -158,11 +161,12 @@ def add_arguments(parser):
     parser.add_argument("path", nargs="?", help="Pasta sources exportada pelo JADX")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--manifest", help="AndroidManifest.xml decodificado (padrão: procurar perto da pasta)")
 
 
 def serve(args, parser):
     try:
-        project = Project(args.path or BASE / "examples" / "pedidos", demo=not args.path)
+        project = Project(args.path or BASE / "examples" / "pedidos", demo=not args.path, manifest=args.manifest)
     except (ValueError, OSError) as error:
         parser.exit(1, f"{error}\n")
     state = State(project)

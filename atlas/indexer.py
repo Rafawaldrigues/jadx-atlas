@@ -14,6 +14,8 @@ import time
 from tree_sitter import Language, Parser
 import tree_sitter_java
 
+from . import manifest as manifest_module
+
 JAVA = Language(tree_sitter_java.language())
 KINDS = {
     "class_declaration": "class",
@@ -26,6 +28,24 @@ JAVA_LANG = set(
     "Object String Number Boolean Byte Short Integer Long Float Double Character Void Throwable Exception RuntimeException Error Enum Record Class Comparable CharSequence Cloneable Runnable AutoCloseable Iterable Thread StringBuilder StringBuffer Math System Override Deprecated SuppressWarnings FunctionalInterface AssertionError IllegalArgumentException IllegalStateException NullPointerException UnsupportedOperationException".split()
 )
 MAX_FILE_BYTES = 8 * 1024 * 1024
+# 1: original payload. 2: adds schemaVersion, manifest, node.component and manifest stats.
+SCHEMA_VERSION = 2
+NODE_COMPONENT_KEYS = (
+    "type",
+    "name",
+    "exported",
+    "exportedReason",
+    "exportedGuess",
+    "exportedGuessReason",
+    "confidence",
+    "permission",
+    "permissionSource",
+    "protectionLevel",
+    "intentFilters",
+    "deepLinks",
+    "enabled",
+    "exposure",
+)
 
 
 def value(node):
@@ -157,7 +177,7 @@ class Cancelled(Exception):
 
 
 class Project:
-    def __init__(self, root, progress=lambda *_: None, cancelled=lambda: False, demo=False):
+    def __init__(self, root, progress=lambda *_: None, cancelled=lambda: False, demo=False, manifest=None):
         started = time.perf_counter()
         self.root = Path(root).expanduser().resolve()
         if not self.root.is_dir():
@@ -267,7 +287,10 @@ class Project:
             for key in list(node):
                 if key.startswith("_"):
                     del node[key]
+        manifest_data, manifest_status = self._attach_manifest(manifest, warnings)
+        components = manifest_data["components"] if manifest_data else []
         self.payload = {
+            "schemaVersion": SCHEMA_VERSION,
             "name": "Pedidos · demonstração" if demo else self.root.name,
             "root": str(self.root),
             "demo": demo,
@@ -283,9 +306,67 @@ class Project:
                 "packages": len({n["package"] for n in self.nodes.values() if not n["external"]}),
                 "parseErrors": parse_errors,
                 "unresolved": uncertain,
+                "manifest": manifest_status,
+                "components": len(components),
+                "exportedComponents": sum(1 for c in components if c["exported"] is True),
+                "potentiallyExported": sum(
+                    1 for c in components if c["exported"] in {"unknown", "inconsistent"} and c.get("exportedGuess")
+                ),
+                "exportedWithoutPermission": sum(
+                    1 for c in components if c["exported"] is True and not c["permission"]
+                ),
+                "deepLinks": sum(len(c["deepLinks"]) for c in components),
+                "componentsWithoutClass": sum(1 for c in components if c["class"] is None),
                 "seconds": round(time.perf_counter() - started, 2),
             },
+            "manifest": manifest_data,
         }
+
+    def _attach_manifest(self, explicit, warnings):
+        """Locate, parse and link the AndroidManifest. Returns (manifest or None, status)."""
+        try:
+            path = manifest_module.locate(self.root, explicit)
+        except manifest_module.ManifestError as error:
+            raise ValueError(str(error)) from None  # the user asked for this file explicitly
+        if not path:
+            # Not a warning: plain Java folders are a supported use. The UI explains stats.manifest == "missing".
+            return None, "missing"
+        base = self.root if path.is_relative_to(self.root) else self.root.parent
+        try:
+            data = manifest_module.load(path, base)
+        except (manifest_module.ManifestError, OSError) as error:
+            if explicit:
+                raise ValueError(str(error)) from None
+            warnings.append(
+                {"path": path.name, "message": f"{error}. A camada de superfície de ataque está desligada."}
+            )
+            return None, "invalid"
+        for message in data["warnings"]:
+            warnings.append({"path": data["path"], "message": message})
+        for component in data["components"]:
+            node = self.nodes.get(component["classId"])
+            # Exact id match only: a short-name coincidence never links a component to a class.
+            component["class"] = component["classId"] if node and not node["external"] else None
+            if component["class"] is None:
+                warnings.append(
+                    {
+                        "path": data["path"],
+                        "message": f"{component['type']} {component['name']} (linha {component['line']}) está no Manifest, mas a classe {component['classId']} não está nas fontes (falha do JADX, desofuscação ou componente de biblioteca ausente).",
+                    }
+                )
+                continue
+            summary = {key: component[key] for key in NODE_COMPONENT_KEYS if key in component}
+            current = node.get("component")
+            # Several declarations (an activity and its aliases) can share one class: keep the most exposed.
+            if current is None or component["exposure"] < current["exposure"]:
+                node["component"] = summary
+            node.setdefault("declaredAs", []).append(component["name"])
+        app_class = data["application"]["name"]
+        if app_class and app_class in self.nodes and not self.nodes[app_class]["external"]:
+            self.nodes[app_class]["applicationClass"] = True
+        elif app_class:
+            warnings.append({"path": data["path"], "message": f"Classe Application {app_class} não está nas fontes."})
+        return data, "found"
 
     def source(self, class_id):
         node = self.nodes.get(class_id)
