@@ -7,6 +7,7 @@ Android framework import), so a correct index reports zero unresolved edges.
 
     python scripts/gen_large_project.py --classes 20000 --depth 8 --obfuscated 0.6
 """
+
 from __future__ import annotations
 
 import argparse
@@ -19,14 +20,19 @@ import string
 import sys
 
 MARKER = ".atlas-generated"
-FRAMEWORK = ["android.app.Activity", "android.app.Service", "android.content.BroadcastReceiver",
-             "android.content.ContentProvider", "android.app.Application"]
+FRAMEWORK = [
+    "android.app.Activity",
+    "android.app.Service",
+    "android.content.BroadcastReceiver",
+    "android.content.ContentProvider",
+    "android.app.Application",
+]
 
 
 def short_names():
     """a, b, ..., z, aa, ab, ...: lowercase only, so case-insensitive file systems never collide."""
     for length in count(1):
-        for index in range(26 ** length):
+        for index in range(26**length):
             name, value = "", index
             for _ in range(length):
                 value, digit = divmod(value, 26)
@@ -66,9 +72,20 @@ def generate(out: Path, classes=5000, depth=6, obfuscated=0.3, packages=None, in
         package = package_names[index % package_count]
         is_obfuscated = package_names.index(package) < obfuscated_packages
         is_interface = bool(interface_pool or index) and rng.random() < interfaces
-        name = next(names_per_package[package]) if is_obfuscated else f"{'Contract' if is_interface else 'Type'}{index:05d}"
-        item = {"package": package, "name": name, "interface": is_interface, "depth": 0,
-                "parent": None, "implements": [], "framework": None}
+        name = (
+            next(names_per_package[package])
+            if is_obfuscated
+            else f"{'Contract' if is_interface else 'Type'}{index:05d}"
+        )
+        item = {
+            "package": package,
+            "name": name,
+            "interface": is_interface,
+            "depth": 0,
+            "parent": None,
+            "implements": [],
+            "framework": None,
+        }
         if is_interface:
             if interface_pool and rng.random() < 0.3:
                 item["implements"] = [rng.choice(interface_pool)]
@@ -82,7 +99,9 @@ def generate(out: Path, classes=5000, depth=6, obfuscated=0.3, packages=None, in
                 item["framework"] = rng.choice(FRAMEWORK)
                 item["depth"] = 1
             if interface_pool:
-                item["implements"] = rng.sample(interface_pool[-200:], k=min(len(interface_pool[-200:]), rng.choice((0, 0, 1, 2))))
+                item["implements"] = rng.sample(
+                    interface_pool[-200:], k=min(len(interface_pool[-200:]), rng.choice((0, 0, 1, 2)))
+                )
             class_pool.append(item)
         types.append(item)
 
@@ -114,7 +133,9 @@ def generate(out: Path, classes=5000, depth=6, obfuscated=0.3, packages=None, in
         if parent:
             header += f" extends {ref(parent)}"
         if item["implements"]:
-            header += (" extends " if item["interface"] else " implements ") + ", ".join(ref(i) for i in item["implements"])
+            header += (" extends " if item["interface"] else " implements ") + ", ".join(
+                ref(i) for i in item["implements"]
+            )
         lines = [f"package {item['package']};", ""]
         lines += [f"import {qualified};" for qualified in sorted(imports.values())]
         lines += ["", f"{header} {{", "}", ""]
@@ -123,8 +144,15 @@ def generate(out: Path, classes=5000, depth=6, obfuscated=0.3, packages=None, in
         (folder / f"{item['name']}.java").write_text("\n".join(lines), encoding="utf-8")
 
     short = sum(1 for item in types if len(item["name"]) <= 2)
-    return {"out": str(out), "types": len(types), "interfaces": len(interface_pool), "packages": package_count,
-            "maxDepth": max(item["depth"] for item in types), "shortNameFraction": round(short / len(types), 3), "seed": seed}
+    return {
+        "out": str(out),
+        "types": len(types),
+        "interfaces": len(interface_pool),
+        "packages": package_count,
+        "maxDepth": max(item["depth"] for item in types),
+        "shortNameFraction": round(short / len(types), 3),
+        "seed": seed,
+    }
 
 
 def main(argv=None):
@@ -139,7 +167,9 @@ def main(argv=None):
     parser.add_argument("--force", action="store_true", help="Recria a pasta se ela foi gerada por este script")
     args = parser.parse_args(argv)
     try:
-        summary = generate(args.out, args.classes, args.depth, args.obfuscated, args.packages, args.interfaces, args.seed, args.force)
+        summary = generate(
+            args.out, args.classes, args.depth, args.obfuscated, args.packages, args.interfaces, args.seed, args.force
+        )
     except ValueError as error:
         parser.exit(1, f"{error}\n")
     json.dump(summary, sys.stdout)

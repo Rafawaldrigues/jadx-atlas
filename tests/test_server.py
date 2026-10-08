@@ -1,12 +1,11 @@
-import json
 from functools import partial
 from http.server import ThreadingHTTPServer
-from pathlib import Path
+import json
 import threading
 import time
 import unittest
-from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 from app import BASE, Handler, State
 from atlas.indexer import Project
@@ -44,7 +43,11 @@ class ServerTests(unittest.TestCase):
         error.exception.close()
 
     def test_cross_origin_import_rejected(self):
-        request = Request(self.url + "/api/demo", data=b"{}", headers={"Content-Type": "application/json", "Origin": "https://example.org"})
+        request = Request(
+            self.url + "/api/demo",
+            data=b"{}",
+            headers={"Content-Type": "application/json", "Origin": "https://example.org"},
+        )
         with self.assertRaises(HTTPError) as error:
             urlopen(request)
         self.assertEqual(error.exception.code, 403)
@@ -58,12 +61,16 @@ class ServerTests(unittest.TestCase):
 
     def test_failed_import_preserves_project(self):
         old = self.state.project
-        request = Request(self.url + "/api/import", data=json.dumps({"path": str(BASE / "does-not-exist")}).encode(), headers={"Content-Type": "application/json"})
+        request = Request(
+            self.url + "/api/import",
+            data=json.dumps({"path": str(BASE / "does-not-exist")}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
         with urlopen(request) as response:
             self.assertEqual(response.status, 202)
         deadline = time.monotonic() + 5
         while self.state.status["busy"] and time.monotonic() < deadline:
-            time.sleep(.01)
+            time.sleep(0.01)
         self.assertIs(self.state.project, old)
         self.assertIn("não encontrada", self.state.status["error"])
 

@@ -1,4 +1,5 @@
 """Exercise actual JADX output when Java and JADX are installed."""
+
 from pathlib import Path
 import shutil
 import subprocess
@@ -14,7 +15,8 @@ class JadxIntegrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "Example.java"
-            source.write_text('''package sample;
+            source.write_text(
+                """package sample;
 import java.io.Serializable;
 interface Root {}
 interface View extends Root {}
@@ -23,7 +25,9 @@ public class Example extends Base<String> implements View, Serializable {
     public static class Inner extends Example {}
     public String name() { return "ação"; }
 }
-''', encoding="utf-8")
+""",
+                encoding="utf-8",
+            )
             for command in [
                 ["javac", "--release", "11", "-d", str(root / "classes"), str(source)],
                 ["jar", "cf", str(root / "example.jar"), "-C", str(root / "classes"), "."],

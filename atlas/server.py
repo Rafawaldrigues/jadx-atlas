@@ -1,4 +1,5 @@
 """Local-only HTTP application. Run with `jadx-atlas [sources-directory]`."""
+
 from __future__ import annotations
 
 from functools import partial
@@ -9,7 +10,7 @@ import threading
 from urllib.parse import parse_qs, urlparse
 import webbrowser
 
-from .indexer import Project, Cancelled
+from .indexer import Cancelled, Project
 
 # Package directory: holds web/ (static UI) and examples/ (demo project).
 BASE = Path(__file__).resolve().parent
@@ -44,7 +45,9 @@ class State:
                     self.status.update(message="Análise concluída", error=None)
             except Cancelled:
                 with self.lock:
-                    self.status.update(message="Importação cancelada", error="Importação cancelada. O projeto anterior foi mantido.")
+                    self.status.update(
+                        message="Importação cancelada", error="Importação cancelada. O projeto anterior foi mantido."
+                    )
             except Exception as error:
                 with self.lock:
                     self.status.update(message="Falha na importação", error=str(error))
@@ -67,7 +70,10 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'",
+        )
         super().end_headers()
 
     def json(self, obj, status=200):
@@ -175,4 +181,3 @@ def serve(args, parser):
     finally:
         state.cancel.set()
         server.server_close()
-
