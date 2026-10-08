@@ -1,0 +1,15 @@
+{
+  "name": "jadx-atlas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Explorador local de herança e interfaces em código Java exportado pelo JADX",
+  "scripts": {
+    "vendor": "node scripts/vendor.mjs",
+    "check": "node --check web/app.js"
+  },
+  "dependencies": {
+    "cytoscape": "3.33.1",
+    "cytoscape-dagre": "2.5.0",
+    "dagre": "0.8.5"
+  }
+}
