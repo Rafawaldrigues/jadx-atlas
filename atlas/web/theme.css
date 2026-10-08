@@ -77,3 +77,24 @@ dialog{background:#e8e8e8;border:2px solid #a0a0a0;box-shadow:2px 3px 12px #0003
 .role-path{margin-top:4px;font:9px/1.7 var(--mono);color:#595959;overflow-wrap:anywhere}
 .role-link{display:inline;border:0;background:none;box-shadow:none;padding:0;font:inherit;color:#204a87;text-decoration:underline;cursor:pointer}
 .role-step{color:#202020}
+
+/* Findings (phase 3). Severity letter + colour, never colour alone. */
+.findings-filters{display:grid;gap:4px;margin-bottom:8px;font-size:10px;color:#595959}
+.findings-filters label{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.findings-filters select{font-size:10px;padding:2px;min-width:110px}
+.finding-row{align-items:flex-start}
+.finding-row small{white-space:normal;line-height:1.35}
+.finding-snippet{display:block;margin-top:4px;font:9px/1.4 var(--mono);color:#202020;background:#f6f6f6;padding:3px;white-space:pre-wrap;overflow-wrap:anywhere}
+.severity-marker{font:bold 11px var(--mono);width:16px;text-align:center;border:1px solid #a0a0a0;background:#fff;color:#595959}
+.severity-high .severity-marker,.finding-tag.severity-high{color:#a00000;border-color:#a00000}
+.severity-medium .severity-marker,.finding-tag.severity-medium{color:#a05000;border-color:#a05000}
+.severity-low .severity-marker,.finding-tag.severity-low{color:#204a87;border-color:#204a87}
+.finding-tag{margin-left:4px;font:9px var(--mono);padding:0 3px;border:1px solid #a0a0a0;background:#fff;color:#595959}
+.class-row .finding-tag:first-of-type{margin-left:auto}
+.metric-findings strong{color:#a05000}
+.source-finding{padding:8px 18px;background:#fffbe6;border-bottom:1px solid #a0a0a0;font-size:11px;max-height:180px;overflow:auto}
+.source-finding a{display:block;font:10px var(--mono);color:#204a87;overflow-wrap:anywhere}
+.rule-details p{margin:4px 0;color:#202020}.rule-details .false-positives{color:#595959}
+.code-line.finding-line{background:#ffd8d8;border-left:3px solid #a00000}
+.code-line.finding-line .line-number{background:#ffd8d8;color:#a00000;font-weight:bold}
+.findings-panel[hidden]{display:none}

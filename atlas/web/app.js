@@ -12,7 +12,7 @@ const LIMIT = 600;
 const state = { project: null, nodes: new Map(), incoming: new Map(), outgoing: new Map(), selected: null,
   kind: 'all', query: '', mode: 'all', history: [], listLimit: 200, revision: -1,
   source: '', sourceLine: 1, sourceRequest: 0, busy: false, collapsed: new Set(), fullHierarchy: false,
-  surface: { exported: false, deeplink: false, noperm: false, type: '' }, role: '', panel: 'class' };
+  surface: { exported: false, deeplink: false, noperm: false, type: '' }, role: '', panel: 'class', rules: new Map(), sourceFinding: null };
 let cy;
 let toastTimer;
 
@@ -101,8 +101,10 @@ async function loadProject() {
   $('#show-warnings').classList.toggle('has-warnings', project.warnings.length > 0);
   $('#analysis-info').textContent = `Indexado em ${project.stats.seconds.toLocaleString('pt-BR')} s · ${project.stats.external} referências externas`;
   $('#project-path').value = project.demo ? '' : project.root;
+  state.rules = new Map((project.rules || []).map(rule => [rule.id, rule]));
   renderSurfaceChrome();
   renderRoleFilter();
+  renderFindingsChrome();
   const filter = $('#package-filter');
   filter.replaceChildren(new Option('Todos os pacotes', ''));
   [...new Set(project.nodes.filter(n => !n.external).map(n => n.package))].sort().forEach(p => filter.add(new Option(p || '(sem pacote)', p || '__default')));
@@ -179,6 +181,11 @@ function renderList() {
       button.setAttribute('aria-pressed', String(node.id === state.selected));
       const local = node.package ? node.id.slice(node.package.length + 1) : node.id;
       button.append(icon(node), make('span', 'class-name', local));
+      if (node.findings) {
+        const worst = ['high', 'medium', 'low', 'info'].find(s => node.findings[s]);
+        const total = Object.values(node.findings).reduce((a, b) => a + b, 0);
+        button.append(make('span', `finding-tag severity-${worst}`, `${total}${worst[0].toUpperCase()}`));
+      }
       if (node.component && isExposed(node.component)) button.append(make('span', `surface-tag${isPotential(node.component) ? ' potential' : ''}`, isPotential(node.component) ? 'EXP?' : 'EXP'));
       button.addEventListener('click', () => select(node.id));
       group.append(button);
@@ -320,6 +327,7 @@ function renderDetails() {
   rootButton.addEventListener('click', goToRootClass);
   hierarchyActions.append(focus, complete, rootButton);
   top.append(hierarchyActions); root.append(top);
+  if (node.findings) root.append(findingsSection(node));
   if (node.roles?.length) root.append(rolesSection(node));
   if (node.component) root.append(componentSection(node));
   else if (node.applicationClass) root.append(make('div', 'external-note', 'Classe Application declarada no AndroidManifest: é executada antes de qualquer componente.'));
@@ -454,13 +462,89 @@ function renderSurface() {
   root.append(list);
 }
 
+const PANELS = { class: 'details', surface: 'surface', findings: 'findings' };
+
 function setPanel(panel) {
   state.panel = panel;
-  const surface = panel === 'surface';
-  $('#details').hidden = surface; $('#surface').hidden = !surface;
-  $('#tab-class').classList.toggle('active', !surface); $('#tab-surface').classList.toggle('active', surface);
-  $('#tab-class').setAttribute('aria-selected', String(!surface)); $('#tab-surface').setAttribute('aria-selected', String(surface));
-  if (surface) renderSurface();
+  for (const [name, id] of Object.entries(PANELS)) {
+    $('#' + id).hidden = name !== panel;
+    $(`#tab-${name}`).classList.toggle('active', name === panel);
+    $(`#tab-${name}`).setAttribute('aria-selected', String(name === panel));
+  }
+  if (panel === 'surface') renderSurface();
+  if (panel === 'findings') renderFindings();
+}
+
+// Findings (phase 3): candidates for manual review, never verdicts.
+const SEVERITY_RANK = { info: 0, low: 1, medium: 2, high: 3 };
+const CONFIDENCE_RANK = { low: 1, medium: 2, high: 3 };
+
+function ruleOf(id) { return state.rules.get(id) || { id, title: id, description: '', remediation: '', falsePositives: '', references: [] }; }
+
+function findingButton(finding, showClass) {
+  const rule = ruleOf(finding.ruleId);
+  const button = make('button', `relation-button finding-row severity-${finding.severity}`);
+  const text = make('span');
+  const where = showClass ? `${finding.classId.split('.').pop()} · ` : '';
+  text.append(make('strong', '', rule.title),
+    make('small', '', `${finding.severity.toUpperCase()} · confiança ${finding.confidence} · ${where}L${finding.line}${finding.inAnonymous ? ' · classe anônima/local' : ''}${finding.partial ? ' · arquivo parcial' : ''}`),
+    make('code', 'finding-snippet', finding.snippet));
+  button.append(make('span', 'severity-marker', finding.severity[0].toUpperCase()), text, make('span', 'arrow', '↗'));
+  button.title = 'Abrir o código nesta linha';
+  button.addEventListener('click', () => {
+    const node = state.nodes.get(finding.classId);
+    if (!node) return;
+    if (state.selected !== finding.classId) select(finding.classId);
+    openSource(node, finding.line, finding);
+  });
+  return button;
+}
+
+function renderFindings() {
+  const root = $('#findings-list'); root.replaceChildren();
+  const severity = $('#filter-severity').value, category = $('#filter-category').value, confidence = $('#filter-confidence').value;
+  const findings = (state.project?.findings || []).filter(f =>
+    (!severity || SEVERITY_RANK[f.severity] >= SEVERITY_RANK[severity]) && (!category || f.category === category) &&
+    (!confidence || CONFIDENCE_RANK[f.confidence] >= CONFIDENCE_RANK[confidence]));
+  root.append(make('p', 'relations-empty', `${findings.length.toLocaleString('pt-BR')} candidatos. Confiança high: tipo do receptor confirmado pelos imports; medium: método e import batem; low: só o nome do método.`));
+  for (const finding of findings.slice(0, 500)) root.append(findingButton(finding, true));
+  if (findings.length > 500) root.append(make('p', 'relations-empty', `Mostrando 500 de ${findings.length}. Use os filtros ou exporte o JSON.`));
+}
+
+function findingsSection(node) {
+  const findings = state.project.findings.filter(f => f.classId === node.id);
+  const section = make('section', 'relations-section findings-section');
+  const title = make('div', 'relations-title');
+  title.append(make('span', '', 'CANDIDATOS A ACHADO NESTA CLASSE'), make('small', '', findings.length));
+  section.append(title);
+  for (const finding of findings.slice(0, 50)) section.append(findingButton(finding, false));
+  return section;
+}
+
+function ruleDetails(finding) {
+  const rule = ruleOf(finding.ruleId);
+  const box = make('div', 'rule-details');
+  box.append(make('strong', '', `${rule.title} — candidato (${finding.severity}, confiança ${finding.confidence})`), make('p', '', rule.description));
+  if (finding.detail || finding.secret) box.append(make('p', '', [finding.detail, finding.secret && `valor mascarado: ${finding.secret}`].filter(Boolean).join(' · ')));
+  box.append(make('p', '', `Correção: ${rule.remediation}`), make('p', 'false-positives', `Falsos positivos conhecidos: ${rule.falsePositives}`));
+  for (const url of rule.references || []) {
+    const link = make('a', '', url); link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+    box.append(link);
+  }
+  return box;
+}
+
+function renderFindingsChrome() {
+  const findings = state.project.findings || [];
+  $('#tab-findings').hidden = !state.project.rules?.length;
+  $('#show-findings').hidden = !state.project.rules?.length;
+  const relevant = findings.filter(f => f.severity !== 'info').length;
+  $('#stat-findings').textContent = `${relevant.toLocaleString('pt-BR')}${findings.length > relevant ? ` +${findings.length - relevant} info` : ''}`;
+  const categories = [...new Set(findings.map(f => f.category))].sort();
+  const select = $('#filter-category');
+  select.replaceChildren(new Option('todas', ''));
+  for (const category of categories) select.add(new Option(category, category));
+  if (state.panel === 'findings') renderFindings();
 }
 
 function renderRoleFilter() {
@@ -494,7 +578,7 @@ function renderSurfaceChrome() {
   state.surface = { exported: false, deeplink: false, noperm: false, type: '' };
   ['filter-exported', 'filter-deeplink', 'filter-noperm'].forEach(id => { $('#' + id).checked = false; });
   $('#filter-component-type').value = '';
-  setPanel(hasManifest && state.panel === 'surface' ? 'surface' : 'class');
+  setPanel(state.panel === 'findings' ? 'findings' : hasManifest && state.panel === 'surface' ? 'surface' : 'class');
 }
 
 function visibleGraph() {
@@ -553,6 +637,10 @@ function nodeLabel(n) {
     detail = `${marker}${n.component.type}${n.component.deepLinks.length ? ' · link' : ''}`;
   } else if (n.applicationClass) detail = 'Application';
   else if (role) detail += ` · ${role.label}${role.confidence === 'high' ? '' : ' ?'}`;
+  if (n.findings) {
+    const worst = ['high', 'medium', 'low', 'info'].find(s => n.findings[s]);
+    if (worst !== 'info') detail += ` · ${n.findings[worst]}×${worst}`;
+  }
   return `${name}\n${detail}`;
 }
 
@@ -610,9 +698,12 @@ function resetFilters(render = true) {
   if (render) { cy.resize(); renderGraph(); }
 }
 
-async function openSource(node) {
+async function openSource(node, focusLine = null, finding = null) {
   const request = ++state.sourceRequest;
   state.source = '';
+  state.focusLine = focusLine;
+  const details = $('#source-finding'); details.replaceChildren(); details.hidden = !finding;
+  if (finding) details.append(ruleDetails(finding));
   $('#source-title').textContent = node.name;
   $('#source-path').textContent = node.path;
   $('#source-code').replaceChildren(make('p', 'no-results', 'Lendo arquivo…'));
@@ -630,7 +721,7 @@ async function openSource(node) {
       if (request !== state.sourceRequest) return;
       const fragment = document.createDocumentFragment();
       for (let index = offset; index < Math.min(offset + 400, lines.length); index++) {
-        const row = make('div', `code-line${index + 1 === source.line ? ' declaration-line' : ''}`);
+        const row = make('div', `code-line${index + 1 === source.line ? ' declaration-line' : ''}${index + 1 === focusLine ? ' finding-line' : ''}`);
         row.dataset.line = index + 1;
         row.append(make('span', 'line-number', index + 1), make('span', 'line-text', lines[index]));
         fragment.append(row);
@@ -639,7 +730,7 @@ async function openSource(node) {
       if (offset === 0 || (source.line > offset && source.line <= offset + 400)) jumpDeclaration();
       await new Promise(resolve => setTimeout(resolve, 0));
     }
-    $('#source-notice').textContent = `${lines.length.toLocaleString('pt-BR')} linhas · Declaração na linha ${source.line} · Somente leitura`;
+    $('#source-notice').textContent = `${lines.length.toLocaleString('pt-BR')} linhas · Declaração na linha ${source.line}${focusLine ? ` · Candidato na linha ${focusLine}` : ''} · Somente leitura`;
     $('#copy-source').disabled = $('#jump-declaration').disabled = false;
     jumpDeclaration();
   } catch (error) {
@@ -648,7 +739,7 @@ async function openSource(node) {
 }
 
 function jumpDeclaration() {
-  const line = $('#source-code .declaration-line');
+  const line = $('#source-code .finding-line') || $('#source-code .declaration-line');
   if (line) $('#source-code').scrollTop = line.offsetTop - $('#source-code').offsetTop - 85;
 }
 
@@ -780,6 +871,9 @@ function setup() {
   $('#cancel-import').addEventListener('click', async () => { try { await api('/api/cancel', {}); } catch (error) { toast(error.message); } });
   $('#show-warnings').addEventListener('click', showWarnings);
   $('#show-surface').addEventListener('click', () => setPanel('surface'));
+  $('#show-findings').addEventListener('click', () => setPanel('findings'));
+  $('#tab-findings').addEventListener('click', () => setPanel('findings'));
+  ['filter-severity', 'filter-category', 'filter-confidence'].forEach(id => $('#' + id).addEventListener('change', renderFindings));
   $('#tab-class').addEventListener('click', () => setPanel('class'));
   $('#tab-surface').addEventListener('click', () => setPanel('surface'));
   const surfaceChanged = () => {
