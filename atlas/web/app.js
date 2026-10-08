@@ -11,7 +11,8 @@ const make = (tag, className, text) => {
 const LIMIT = 600;
 const state = { project: null, nodes: new Map(), incoming: new Map(), outgoing: new Map(), selected: null,
   kind: 'all', query: '', mode: 'all', history: [], listLimit: 200, revision: -1,
-  source: '', sourceLine: 1, sourceRequest: 0, busy: false, collapsed: new Set(), fullHierarchy: false };
+  source: '', sourceLine: 1, sourceRequest: 0, busy: false, collapsed: new Set(), fullHierarchy: false,
+  surface: { exported: false, deeplink: false, noperm: false, type: '' }, panel: 'class' };
 let cy;
 let toastTimer;
 
@@ -40,6 +41,33 @@ function kindLabel(node) {
   return node.external ? 'referência externa' : ({ class: 'classe', interface: 'interface', enum: 'enum', record: 'record', annotation: 'anotação' }[node.kind]);
 }
 
+// Attack-surface helpers. "Potentially exported" = unknown/inconsistent with a guess of true; never shown as confirmed.
+function isPotential(component) {
+  return ['unknown', 'inconsistent'].includes(component.exported) && component.exportedGuess === true;
+}
+
+function isExposed(component) { return component.exported === true || isPotential(component); }
+
+function exposureLabel(component) {
+  if (component.exported === true) return component.permission ? `exportado · exige ${component.permission} (${component.protectionLevel || 'unknown'})` : 'exportado · sem permissão';
+  if (isPotential(component)) return component.exported === 'inconsistent' ? 'potencialmente exportado · Manifest inconsistente' : 'potencialmente exportado · valor desconhecido';
+  if (component.exported === 'unknown') return 'exportação desconhecida';
+  if (component.exported === 'inconsistent') return 'Manifest inconsistente';
+  return 'não exportado';
+}
+
+function surfaceFilterActive() { return state.surface.exported || state.surface.deeplink || state.surface.noperm || Boolean(state.surface.type); }
+
+function matchesSurface(node) {
+  if (!surfaceFilterActive()) return true;
+  const component = node.component;
+  if (!component) return false;
+  return (!state.surface.exported || isExposed(component)) &&
+    (!state.surface.deeplink || component.deepLinks.length > 0) &&
+    (!state.surface.noperm || !component.permission) &&
+    (!state.surface.type || component.type === state.surface.type);
+}
+
 async function loadProject() {
   const project = await api('/api/project');
   if (!project) return;
@@ -55,8 +83,8 @@ async function loadProject() {
   state.history = []; state.collapsed.clear(); state.listLimit = 200;
   state.query = ''; state.kind = 'all'; $('#search').value = '';
   $$('[data-kind]').forEach(button => button.classList.toggle('active', button.dataset.kind === 'all'));
-  state.selected = project.nodes.find(n => n.name === 'PedidoActivity' && !n.external)?.id
-    || [...project.nodes].filter(n => !n.external).sort((a, b) => degree(b.id) - degree(a.id))[0]?.id;
+  const firstExposed = project.manifest?.components.find(c => c.class && isExposed(c))?.class;
+  state.selected = firstExposed || [...project.nodes].filter(n => !n.external).sort((a, b) => degree(b.id) - degree(a.id))[0]?.id;
   $('#project-name').textContent = project.name;
   $('#project-name').title = project.root;
   $('#demo-badge').hidden = !project.demo;
@@ -66,6 +94,7 @@ async function loadProject() {
   $('#show-warnings').classList.toggle('has-warnings', project.warnings.length > 0);
   $('#analysis-info').textContent = `Indexado em ${project.stats.seconds.toLocaleString('pt-BR')} s · ${project.stats.external} referências externas`;
   $('#project-path').value = project.demo ? '' : project.root;
+  renderSurfaceChrome();
   const filter = $('#package-filter');
   filter.replaceChildren(new Option('Todos os pacotes', ''));
   [...new Set(project.nodes.filter(n => !n.external).map(n => n.package))].sort().forEach(p => filter.add(new Option(p || '(sem pacote)', p || '__default')));
@@ -115,7 +144,7 @@ function renderList() {
   if (!state.project) return;
   const matches = state.project.nodes.filter(n => !n.external &&
     (state.kind === 'all' || (state.kind === 'interface' ? ['interface', 'annotation'].includes(n.kind) : !['interface', 'annotation'].includes(n.kind))) &&
-    `${n.id} ${n.path}`.toLowerCase().includes(state.query));
+    `${n.id} ${n.path}`.toLowerCase().includes(state.query) && matchesSurface(n));
   matches.sort((a, b) => a.id.localeCompare(b.id));
   $('#search-count').textContent = matches.length.toLocaleString('pt-BR');
   if (!matches.length) {
@@ -142,6 +171,7 @@ function renderList() {
       button.setAttribute('aria-pressed', String(node.id === state.selected));
       const local = node.package ? node.id.slice(node.package.length + 1) : node.id;
       button.append(icon(node), make('span', 'class-name', local));
+      if (node.component && isExposed(node.component)) button.append(make('span', `surface-tag${isPotential(node.component) ? ' potential' : ''}`, isPotential(node.component) ? 'EXP?' : 'EXP'));
       button.addEventListener('click', () => select(node.id));
       group.append(button);
     }
@@ -254,6 +284,7 @@ function renderDetails() {
   const badges = make('div', 'detail-badges');
   badges.append(make('span', node.kind, kindLabel(node)));
   if (node.abstract) badges.append(make('span', 'neutral', 'abstract'));
+  if (node.component) badges.append(make('span', `surface ${surfaceClass(node)}`, node.component.exported === true ? 'EXPORTADO' : isPotential(node.component) ? 'EXPORTADO?' : node.component.type));
   top.append(badges, make('h2', '', node.name), make('p', 'qualified-name', node.id.startsWith('?') ? node.declaration : node.id));
   if (node.path) {
     const source = make('button', 'source-link');
@@ -281,6 +312,8 @@ function renderDetails() {
   rootButton.addEventListener('click', goToRootClass);
   hierarchyActions.append(focus, complete, rootButton);
   top.append(hierarchyActions); root.append(top);
+  if (node.component) root.append(componentSection(node));
+  else if (node.applicationClass) root.append(make('div', 'external-note', 'Classe Application declarada no AndroidManifest: é executada antes de qualquer componente.'));
   const outgoing = state.outgoing.get(node.id) || [];
   const incoming = state.incoming.get(node.id) || [];
   const ancestry = ancestryOf(node.id);
@@ -296,8 +329,129 @@ function renderDetails() {
   if (node.kind === 'interface' || incoming.some(e => e.kind === 'implements')) root.append(relationSection('IMPLEMENTADA POR', incoming.filter(e => e.kind === 'implements'), 'source'));
 }
 
+function definition(list, term, value) {
+  if (value === undefined || value === null || value === '') return;
+  list.append(make('dt', '', term), make('dd', '', String(value)));
+}
+
+function componentSection(node) {
+  const component = node.component;
+  const section = make('section', 'relations-section component-section');
+  const title = make('div', 'relations-title');
+  title.append(make('span', '', 'COMPONENTE ANDROID (CANDIDATO)'), make('small', '', component.type));
+  section.append(title);
+  section.append(make('p', `exposure-line ${surfaceClass(node)}`, exposureLabel(component)));
+  const list = make('dl', 'component-facts');
+  definition(list, 'Declarado como', (node.declaredAs || [component.name]).join(', '));
+  definition(list, 'exported', `${component.exported} — ${component.exportedReason}`);
+  if ('exportedGuess' in component) definition(list, 'Palpite', `${component.exportedGuess === null ? 'sem palpite' : component.exportedGuess ? 'potencialmente exportado' : 'potencialmente não exportado'} — ${component.exportedGuessReason}`);
+  definition(list, 'Confiança', component.confidence);
+  definition(list, 'Permissão', component.permission ? `${component.permission} (${component.permissionSource === 'application' ? 'herdada de <application>' : 'do componente'})` : 'nenhuma');
+  definition(list, 'protectionLevel', component.protectionLevel);
+  definition(list, 'enabled', component.enabled);
+  definition(list, 'intent-filters', component.intentFilters.length);
+  section.append(list);
+  if (component.deepLinks.length) {
+    section.append(make('div', 'relations-title', 'DEEP LINKS'));
+    for (const link of component.deepLinks) section.append(make('code', 'deep-link', `${link.uri}${link.autoVerify ? '  (autoVerify)' : ''}`));
+  }
+  for (const filter of component.intentFilters.slice(0, 20)) {
+    const text = [...filter.actions, ...filter.categories.map(c => `cat: ${c}`)].join('\n') || '(sem action)';
+    section.append(make('pre', 'declaration filter-box', text));
+  }
+  return section;
+}
+
+function appAlerts(manifest) {
+  const app = manifest.application;
+  const alerts = [];
+  const flag = (key, label, defaultText) => {
+    const item = app[key];
+    if (item.value === true) alerts.push(`${label}="true"`);
+    else if (item.value === 'unknown') alerts.push(`${label}: ${item.reason}${item.guess !== null && item.guess !== undefined ? ` — palpite: ${item.guess} (${item.guessReason})` : ''}`);
+    else if (item.value === null && defaultText) alerts.push(defaultText);
+  };
+  flag('debuggable', 'android:debuggable');
+  flag('testOnly', 'android:testOnly');
+  flag('allowBackup', 'android:allowBackup', 'android:allowBackup ausente: o padrão da plataforma é true');
+  const cleartextDefault = manifest.targetSdk !== null && manifest.targetSdk < 28 && !app.networkSecurityConfig
+    ? `android:usesCleartextTraffic ausente com targetSdk ${manifest.targetSdk} < 28: HTTP em texto claro é permitido por padrão` : null;
+  flag('usesCleartextTraffic', 'android:usesCleartextTraffic', cleartextDefault);
+  if (app.networkSecurityConfig) alerts.push(`networkSecurityConfig=${app.networkSecurityConfig} (revise o XML; ele prevalece sobre usesCleartextTraffic)`);
+  return alerts;
+}
+
+function renderSurface() {
+  const root = $('#surface'); root.replaceChildren();
+  const manifest = state.project?.manifest;
+  if (!manifest) return;
+  const head = make('div', 'detail-main');
+  head.append(make('h2', '', manifest.package || '(sem pacote)'),
+    make('p', 'qualified-name', `versão ${manifest.versionName ?? '?'} (${manifest.versionCode ?? '?'}) · minSdk ${manifest.minSdk ?? '?'} · targetSdk ${manifest.targetSdk ?? 'ausente'} · ${manifest.path}`));
+  root.append(head);
+  const alerts = appAlerts(manifest);
+  const box = make('section', 'relations-section app-alerts');
+  const title = make('div', 'relations-title');
+  title.append(make('span', '', 'ALERTAS DO APP (CANDIDATOS)'), make('small', '', alerts.length));
+  box.append(title);
+  if (!alerts.length) box.append(make('p', 'relations-empty', 'Nenhum alerta nos atributos de <application>.'));
+  for (const alert of alerts) box.append(make('p', 'alert-item', alert));
+  root.append(box);
+  const list = make('section', 'relations-section');
+  const listTitle = make('div', 'relations-title');
+  listTitle.append(make('span', '', 'COMPONENTES POR EXPOSIÇÃO'), make('small', '', manifest.components.length));
+  list.append(listTitle);
+  for (const component of manifest.components) {
+    const button = make('button', `relation-button surface-row ${component.exported === true ? 'exported' : isPotential(component) ? 'potential' : ''}`);
+    const text = make('span');
+    const local = component.name.startsWith(manifest.package + '.') ? component.name.slice(manifest.package.length) : component.name;
+    text.append(make('strong', '', local), make('small', '', `${component.type} · ${exposureLabel(component)}${component.deepLinks.length ? ` · ${component.deepLinks.length} deep link(s)` : ''}${component.enabled === false ? ' · desativado' : ''}`));
+    button.append(make('span', 'surface-marker', component.exported === true ? '⇥' : isPotential(component) ? '⇥?' : '·'), text, make('span', 'arrow', component.class ? '↗' : '∅'));
+    button.title = component.class ? `Ir para ${component.class}` : 'A classe não está nas fontes exportadas';
+    button.addEventListener('click', () => {
+      if (!component.class) { toast(`${component.classId} não está nas fontes (falha do JADX, desofuscação ou classe de biblioteca).`); return; }
+      setPanel('class'); select(component.class);
+    });
+    list.append(button);
+  }
+  root.append(list);
+}
+
+function setPanel(panel) {
+  state.panel = panel;
+  const surface = panel === 'surface';
+  $('#details').hidden = surface; $('#surface').hidden = !surface;
+  $('#tab-class').classList.toggle('active', !surface); $('#tab-surface').classList.toggle('active', surface);
+  $('#tab-class').setAttribute('aria-selected', String(!surface)); $('#tab-surface').setAttribute('aria-selected', String(surface));
+  if (surface) renderSurface();
+}
+
+function renderSurfaceChrome() {
+  const project = state.project;
+  const status = project.stats.manifest;
+  const hasManifest = Boolean(project.manifest);
+  $('#surface-filters').hidden = !hasManifest;
+  $('#tab-surface').hidden = !hasManifest;
+  $('#legend-surface').hidden = !hasManifest;
+  $('#show-surface').hidden = !hasManifest;
+  const banner = $('#surface-banner');
+  banner.hidden = hasManifest || status === undefined;
+  banner.textContent = status === 'invalid'
+    ? 'Camada de superfície de ataque desligada: o AndroidManifest.xml encontrado foi recusado (veja os avisos).'
+    : 'Camada de superfície de ataque desligada: AndroidManifest.xml não encontrado. Exporte com o JADX sem --no-res ou informe o caminho do Manifest.';
+  if (hasManifest) {
+    const potential = project.stats.potentiallyExported ? ` +${project.stats.potentiallyExported}?` : '';
+    $('#stat-exported').textContent = `${project.stats.exportedComponents.toLocaleString('pt-BR')}${potential}`;
+  }
+  state.surface = { exported: false, deeplink: false, noperm: false, type: '' };
+  ['filter-exported', 'filter-deeplink', 'filter-noperm'].forEach(id => { $('#' + id).checked = false; });
+  $('#filter-component-type').value = '';
+  setPanel(hasManifest && state.panel === 'surface' ? 'surface' : 'class');
+}
+
 function visibleGraph() {
-  const edges = state.project.edges.filter(e => $(`#show-${e.kind}`).checked &&
+  // Unknown edge kinds (added by later phases) stay visible instead of crashing the map.
+  const edges = state.project.edges.filter(e => ($(`#show-${e.kind}`)?.checked ?? true) &&
     ($('#show-external').checked || (!state.nodes.get(e.target).external && !state.nodes.get(e.source).external)));
   let ids;
   if (state.mode === 'focus') {
@@ -318,7 +472,7 @@ function visibleGraph() {
     }
   } else {
     const pkg = $('#package-filter').value;
-    ids = new Set(state.project.nodes.filter(n => !n.external && (!pkg || n.package === (pkg === '__default' ? '' : pkg))).map(n => n.id));
+    ids = new Set(state.project.nodes.filter(n => !n.external && matchesSurface(n) && (!pkg || n.package === (pkg === '__default' ? '' : pkg))).map(n => n.id));
     const seeds = new Set(ids);
     for (const e of edges) if (seeds.has(e.source) && (state.nodes.get(e.target).external || pkg)) ids.add(e.target);
     if (state.selected && !pkg && ($('#show-external').checked || !state.nodes.get(state.selected).external)) ids.add(state.selected);
@@ -334,9 +488,26 @@ function visibleGraph() {
   return { nodes: [...ids].map(id => state.nodes.get(id)), edges: edges.filter(e => ids.has(e.source) && ids.has(e.target)), total };
 }
 
+function surfaceClass(node) {
+  if (!node.component) return '';
+  return node.component.exported === true ? 'exported' : isPotential(node.component) ? 'potential' : '';
+}
+
+function nodeLabel(n) {
+  const name = n.name.length > 27 ? n.name.slice(0, 25) + '…' : n.name;
+  if (n.external) return `${name}\n↗  ${n.resolution === 'external' ? 'externa' : 'não resolvida'}`;
+  // Text marker as well as the double border, so exposure never depends on colour alone.
+  let detail = n.kind + (n.abstract ? ' · abstract' : '');
+  if (n.component) {
+    const marker = n.component.exported === true ? '⇥ ' : isPotential(n.component) ? '⇥? ' : '';
+    detail = `${marker}${n.component.type}${n.component.deepLinks.length ? ' · link' : ''}`;
+  } else if (n.applicationClass) detail = 'Application';
+  return `${name}\n${detail}`;
+}
+
 function graphElements(graph) {
   return [
-    ...graph.nodes.map(n => ({ data: { id: n.id, label: `${n.name.length > 27 ? n.name.slice(0, 25) + '…' : n.name}\n${n.external ? '↗  ' + (n.resolution === 'external' ? 'externa' : 'não resolvida') : n.kind + (n.abstract ? ' · abstract' : '')}` }, classes: `${n.kind} ${n.external ? 'external' : ''} ${['ambiguous', 'unresolved'].includes(n.resolution) ? 'uncertain' : ''}` })),
+    ...graph.nodes.map(n => ({ data: { id: n.id, label: nodeLabel(n) }, classes: `${n.kind} ${n.external ? 'external' : ''} ${['ambiguous', 'unresolved'].includes(n.resolution) ? 'uncertain' : ''} ${surfaceClass(n)}` })),
     ...graph.edges.map(e => ({ data: { id: e.id, source: e.source, target: e.target, label: e.kind }, classes: e.kind })),
   ];
 }
@@ -434,10 +605,10 @@ async function importProject(demo = false) {
   if (state.busy) return;
   $('#import-error').hidden = true;
   try {
-    await api(demo ? '/api/demo' : '/api/import', demo ? {} : { path: $('#project-path').value });
+    await api(demo ? '/api/demo' : '/api/import', demo ? {} : { path: $('#project-path').value, manifest: $('#manifest-path').value });
     state.busy = true;
     $('#import-progress').hidden = false;
-    $('#submit-import').disabled = $('#load-demo').disabled = $('#project-path').disabled = true;
+    $('#submit-import').disabled = $('#load-demo').disabled = $('#project-path').disabled = $('#manifest-path').disabled = true;
     await pollImport();
   } catch (error) { importError(error.message); }
 }
@@ -445,7 +616,7 @@ async function importProject(demo = false) {
 function finishImport() {
   state.busy = false;
   $('#import-progress').hidden = true;
-  $('#submit-import').disabled = $('#load-demo').disabled = $('#project-path').disabled = false;
+  $('#submit-import').disabled = $('#load-demo').disabled = $('#project-path').disabled = $('#manifest-path').disabled = false;
 }
 
 function importError(message) {
@@ -516,6 +687,8 @@ function setup() {
       { selector: 'node.interface, node.annotation', style: { 'background-color': '#f4edfa', 'border-color': '#660099', 'color': '#660099' } },
       { selector: 'node.external', style: { 'background-color': '#e8e8e8', 'border-color': '#a0a0a0', 'border-style': 'dashed', 'color': '#595959' } },
       { selector: 'node.uncertain', style: { 'background-color': '#ffffdf', 'border-color': '#775500', 'color': '#775500' } },
+      { selector: 'node.exported', style: { 'border-style': 'double', 'border-width': 5, 'border-color': '#a00000' } },
+      { selector: 'node.potential', style: { 'border-style': 'double', 'border-width': 5, 'border-color': '#775500' } },
       { selector: 'node:selected', style: { 'background-color': '#316ac5', 'border-color': '#204a87', 'border-width': 2, 'color': '#ffffff', 'font-weight': 'bold' } },
       { selector: 'edge', style: { 'curve-style': 'bezier', 'width': 1.4, 'line-color': '#204a87', 'target-arrow-color': '#204a87', 'target-arrow-shape': 'triangle', 'arrow-scale': 0.8,
         'label': 'data(label)', 'font-size': 9, 'font-family': 'Consolas, monospace', 'color': '#204a87', 'text-background-color': '#ffffff', 'text-background-opacity': 1, 'text-background-padding': 4, 'text-rotation': 'autorotate', 'text-margin-y': -1, 'overlay-opacity': 0 } },
@@ -555,6 +728,15 @@ function setup() {
   $('#load-demo').addEventListener('click', () => importProject(true));
   $('#cancel-import').addEventListener('click', async () => { try { await api('/api/cancel', {}); } catch (error) { toast(error.message); } });
   $('#show-warnings').addEventListener('click', showWarnings);
+  $('#show-surface').addEventListener('click', () => setPanel('surface'));
+  $('#tab-class').addEventListener('click', () => setPanel('class'));
+  $('#tab-surface').addEventListener('click', () => setPanel('surface'));
+  const surfaceChanged = () => {
+    state.surface = { exported: $('#filter-exported').checked, deeplink: $('#filter-deeplink').checked,
+      noperm: $('#filter-noperm').checked, type: $('#filter-component-type').value };
+    state.listLimit = 200; renderList(); if (state.mode === 'all') renderGraph();
+  };
+  ['filter-exported', 'filter-deeplink', 'filter-noperm', 'filter-component-type'].forEach(id => $('#' + id).addEventListener('change', surfaceChanged));
   $('#jump-declaration').addEventListener('click', jumpDeclaration);
   $('#copy-source').addEventListener('click', async () => { try { await navigator.clipboard.writeText(state.source); toast('Código copiado.'); } catch { toast('O navegador não permitiu copiar. Selecione o texto no painel.'); } });
   $('#export-graph').addEventListener('click', () => {
