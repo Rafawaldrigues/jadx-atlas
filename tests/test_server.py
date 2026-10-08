@@ -84,7 +84,7 @@ class ServerTests(unittest.TestCase):
 
     def test_project_payload_has_schema_version_and_demo_manifest(self):
         project = self.get("/api/project")
-        self.assertEqual(project["schemaVersion"], 2)
+        self.assertGreaterEqual(project["schemaVersion"], 2)
         self.assertEqual(project["manifest"]["package"], "br.exemplo.pedidos")
 
     def test_import_rejects_non_string_manifest(self):

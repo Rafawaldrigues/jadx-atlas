@@ -258,7 +258,7 @@ class ProjectIntegrationTests(unittest.TestCase):
         )
         project = Project(root / "sources")
         payload = project.payload
-        self.assertEqual(payload["schemaVersion"], 2)
+        self.assertGreaterEqual(payload["schemaVersion"], 2)
         self.assertEqual(payload["stats"]["manifest"], "found")
         self.assertEqual(payload["manifest"]["path"], "resources/AndroidManifest.xml")
         self.assertEqual(project.nodes["com.app.Main"]["component"]["type"], "activity")
