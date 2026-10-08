@@ -47,6 +47,18 @@ Tudo isso é **candidato a revisão**, não veredicto. O Manifest é lido como e
 
 Cada classe recebe papéis (Activity, Service, Receiver, Provider, Application, Fragment, TrustManager, HostnameVerifier, WebViewClient, WebChromeClient, SSLSocketFactory, AsyncTask, Parcelable, Serializable) pela **cadeia de ancestrais**, inclusive quando os nomes são ofuscados (`a.b.c (Activity)`). Depois do código do app, a cadeia continua por uma tabela de tipos do Android, do AndroidX e da support library, gerada com `javap` a partir dos artefatos oficiais (`atlas/data/framework_hierarchy.json`, com a versão de cada tipo). Cada papel mostra o caminho percorrido e a confiança: uma referência ambígua no meio do caminho a rebaixa. O papel é conferido com o Manifest: se um componente declarado não tem o ancestral esperado, aparece um aviso de "possível erro de resolução".
 
+## Candidatos a achado (APIs sensíveis)
+
+30 regras em `atlas/data/rules/*.json` procuram usos que **costumam** indicar problema: WebView (JavaScript, ponte nativa, acesso a arquivos, depuração, `loadUrl` dinâmico), TLS (TrustManager vazio, HostnameVerifier que aceita tudo, `onReceivedSslError` com `proceed()`, protocolos antigos), criptografia (ECB, DES/RC4, MD5/SHA-1, chave/IV/semente literais), execução (`Runtime.exec`, `ProcessBuilder`, `DexClassLoader`, reflexão), armazenamento e IPC (`MODE_WORLD_*`, SQL concatenado, `PendingIntent` mutável, broadcast sem permissão, leitura de Intent em componente exportado) e segredos (formatos conhecidos, alta entropia, URLs `http://`). Cada regra documenta falsos positivos conhecidos e referências oficiais.
+
+A **confiança** não depende de um sistema de tipos:
+
+- **high**: o tipo declarado do receptor resolve, pelos imports do arquivo, para a classe da API, e o método bate;
+- **medium**: o método bate e o arquivo importa a API, mas o tipo do receptor não foi determinado (getter encadeado, campo herdado);
+- **low**: só o nome do método bate, ou um argumento não pôde ser avaliado (variável, concatenação).
+
+Receptores de outro tipo são descartados. O código de classes anônimas é atribuído à classe que o contém. Segredos aparecem sempre mascarados (`AKIA…[20 caracteres]`). Clicar num achado abre o código na linha, com a explicação da regra. **Não há análise de fluxo de dados**: são pistas para revisão manual.
+
 ## Explorar
 
 - **Busca**: localiza pelo nome da classe, nome completo, pacote ou caminho do arquivo. Atalho `/`.

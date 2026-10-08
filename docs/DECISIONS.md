@@ -87,3 +87,27 @@ Fonte: `frameworks/base/core/java/com/android/internal/pm/pkg/component/` (branc
 - Papéis só vão para classes do projeto, nunca para nós externos. `node.roles = [{role, label, confidence, path, via}]`.
 - Cruzamento com o Manifest: `component.roleCheck` = confiança do papel esperado ou `"missing"`, este último com aviso "possível erro de resolução". Classe com ancestral de componente mas não declarada recebe `undeclaredComponent` (só informação).
 - Nós externos presentes na tabela recebem o `kind` real (`interface`, `abstract`) e a `framework` de origem.
+
+## D-015 · Extração de fatos de código sem reparse e sem tabela de variáveis guardada (Fase 3)
+
+- **Contexto:** a coleta não pode dobrar o tempo de indexação, e o `payload` não pode guardar corpos de métodos.
+- **Decisão:** `atlas/code_facts.py` roda *queries* do tree-sitter (em C) na **mesma árvore** de `parse_file` e guarda só os eventos que alguma regra pode casar: chamadas cujo nome de método está nas regras, criações de tipos das regras, `override` de métodos das regras, identificadores (`MODE_WORLD_*`) e strings que passam no pré-filtro. O tipo declarado do receptor é resolvido **na hora**, subindo pelos escopos (variável local declarada antes, parâmetros, catch/for/try-with-resources, campos das classes envolventes). Por isso a tabela de variáveis não é armazenada. Mapas de campos e constantes ficam em cache por corpo de classe, para evitar custo quadrático.
+- Código de classes anônimas e locais é atribuído à classe nomeada que o contém, com `inAnonymous: true`. Para regras de `override`, o tipo da classe anônima (`new X509TrustManager() {...}`) é resolvido pelos imports e passa pela tabela de framework.
+- Strings dentro de anotações (por exemplo `@Metadata` do Kotlin) são ignoradas.
+
+## D-016 · Confiança dos achados (Fase 3)
+
+- `high`: o tipo declarado do receptor (ou o tipo criado) resolve pelos imports/pacote para o tipo da API, ou para um subtipo conhecido pela tabela de framework; chamada implícita numa classe (ou numa classe envolvente) cujo ancestral é o tipo da API; fábrica estática (`Runtime.getRuntime().exec`).
+- `medium`: o método bate, o arquivo importa a API (ou um tipo indicado em `importHints`) e o receptor não tem tipo determinável (getter encadeado como `getSettings()`, campo herdado). Identificadores `MODE_WORLD_*` também ficam em `medium`.
+- `low`: só o nome do método bate; ou um argumento não pôde ser avaliado (variável, concatenação, chamada).
+- **Descartado:** receptor cujo tipo resolve para outra classe; chamada implícita numa classe sem `extends` (é `Object`) ou com cadeia de framework conhecida que não contém a API. Esse é o principal filtro contra falsos positivos.
+- Limite de 20 achados por regra e classe, para controlar o volume.
+
+## D-017 · Segredos mascarados sempre (Fase 3)
+
+- O payload nunca contém o valor completo de um segredo: o campo `secret` traz os 4 primeiros caracteres e o tamanho, e o `snippet` passa pelo mesmo mascaramento. A opção `--include-secrets` fica para a exportação (Fase 7).
+
+## D-018 · `java.lang` gerado do android.jar e curinga único de framework (Fase 3, corrige A1)
+
+- `atlas/data/java_lang.json` (102 tipos) é gerado pelo mesmo script da tabela de framework. A lista antiga, escrita à mão, é mantida em união, para código Java que não é Android.
+- `import android.webkit.*;` com **um único** import curinga resolve `WebViewClient` para `android.webkit.WebViewClient` quando esse tipo está na tabela gerada por `javap`. Com mais de um curinga, continua `unresolved`: um pacote desconhecido poderia ter um tipo com o mesmo nome.
