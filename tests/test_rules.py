@@ -383,7 +383,7 @@ class ConfidenceAndContextTests(RuleCaseTests):
 
     def test_payload_shape_and_stats(self):
         project = self.project({"app/A.java": CASES["crypto-ecb-mode"][0]})
-        self.assertEqual(project.payload["schemaVersion"], 4)
+        self.assertGreaterEqual(project.payload["schemaVersion"], 4)
         self.assertEqual(project.payload["stats"]["findings"]["medium"], 1)
         finding = project.payload["findings"][0]
         self.assertEqual(

@@ -39,7 +39,8 @@ MAX_FILE_BYTES = 8 * 1024 * 1024
 # 1: original payload. 2: schemaVersion, manifest, node.component, manifest stats.
 # 3: node.roles, node.framework, stats.roles, component.roleCheck.
 # 4: findings, rules, node.findings, stats.findings.
-SCHEMA_VERSION = 4
+# 5: intentEdges, node.intents, node.readsIntent, node.deepLinkHandler, stats.intentEdges.
+SCHEMA_VERSION = 5
 NODE_COMPONENT_KEYS = (
     "type",
     "name",
@@ -321,6 +322,7 @@ class Project:
         manifest_data, manifest_status = self._attach_manifest(manifest, warnings)
         components = manifest_data["components"] if manifest_data else []
         self.findings = self._evaluate_rules() if findings else []
+        self.intent_edges = self._intent_edges(manifest_data) if findings else []
         for node in self.nodes.values():
             for key in [key for key in node if key.startswith("_")]:
                 del node[key]
@@ -357,13 +359,192 @@ class Project:
                 "componentsWithoutClass": sum(1 for c in components if c["class"] is None),
                 "roles": role_counts,
                 "findings": severity_counts,
+                "intentEdges": {
+                    kind: sum(1 for e in self.intent_edges if e["kind"] == kind)
+                    for kind in ("launches", "sends_action", "registers_receiver")
+                },
+                "unresolvedIntents": sum(len(n.get("intents", {}).get("unresolved", [])) for n in self.nodes.values()),
                 "undeclaredComponentClasses": sum(1 for n in self.nodes.values() if n.get("undeclaredComponent")),
                 "seconds": round(time.perf_counter() - started, 2),
             },
             "manifest": manifest_data,
             "findings": self.findings,
+            "intentEdges": self.intent_edges,
             "rules": [rules_module.summary(rule) for rule in rules_module.load_rules()] if findings else [],
         }
+
+    def _intent_edges(self, manifest):
+        """launches / sends_action / registers_receiver edges from intra-method Intent flow (phase 4)."""
+        symbols = {key for key, node in self.nodes.items() if not node["external"]}
+        constants = {key: self.nodes[key].get("_string_constants", {}) for key in symbols}
+        package = manifest["package"] if manifest else ""
+        actions = {}
+        for component in manifest["components"] if manifest else ():
+            if component["class"]:
+                for intent_filter in component["intentFilters"]:
+                    for action in intent_filter["actions"]:
+                        actions.setdefault(action, []).append(component)
+
+        def type_id(name, owner):
+            target, status, _ = resolve(name, owner, symbols)
+            return target if status == "resolved" else None
+
+        def value_of(item, owner):
+            """(string value or None, description of where it came from)."""
+            if not item:
+                return None, None
+            if "value" in item:
+                return item["value"], f"constante {item['constant']}" if "constant" in item else "literal"
+            if "reference" in item:
+                owner_type, _, name = item["reference"].rpartition(".")
+                target = type_id(owner_type, owner) if owner_type else None
+                if target and name in constants.get(target, {}):
+                    return constants[target][name], f"constante {item['reference']}"
+                return None, item["reference"]
+            return None, item.get("unresolved")
+
+        edges, seen = [], set()
+
+        def add(source, target, kind, event, confidence, **extra):
+            key = (id(event), target, extra.get("action"))  # distinct calls on one line stay distinct
+            if key in seen:
+                return
+            seen.add(key)
+            edges.append(
+                {
+                    "id": f"i{len(edges)}",
+                    "source": source,
+                    "target": target,
+                    "kind": kind,
+                    "via": event.get("via", "registerReceiver"),
+                    "line": event["line"],
+                    "confidence": confidence,
+                    "resolution": "resolved",
+                    **extra,
+                }
+            )
+
+        for node in list(self.nodes.values()):
+            if node["external"]:
+                continue
+            unresolved = []
+            for event in node.get("_facts", ()):
+                if event["kind"] == "reads-intent":
+                    if any(r["role"] in {"activity", "service", "receiver"} for r in node.get("roles", ())):
+                        node["readsIntent"] = True
+                    continue
+                if event["kind"] == "register":
+                    target = type_id(event["receiverType"], node) if event["receiverType"] else None
+                    resolved_actions = [
+                        value_of(a, node)[0] or f"? {value_of(a, node)[1]}" for a in (event["actions"] or [])
+                    ]
+                    if target:
+                        add(
+                            node["id"],
+                            target,
+                            "registers_receiver",
+                            event,
+                            "high" if event["exact"] else "medium",
+                            actions=resolved_actions,
+                        )
+                    else:
+                        unresolved.append(
+                            {
+                                "line": event["line"],
+                                "via": "registerReceiver",
+                                "reason": "receptor fora das fontes ou de tipo desconhecido",
+                                "text": event["text"],
+                            }
+                        )
+                    continue
+                if event["kind"] != "intent":
+                    continue
+                intent = event["intent"]
+                if intent is None:
+                    unresolved.append(
+                        {
+                            "line": event["line"],
+                            "via": event["via"],
+                            "reason": "Intent não rastreável dentro do método",
+                            "text": event["argument"],
+                        }
+                    )
+                    continue
+                if intent.get("targetType"):
+                    target = type_id(intent["targetType"], node)
+                    if target:
+                        add(node["id"], target, "launches", event, "high")
+                    else:
+                        unresolved.append(
+                            {
+                                "line": event["line"],
+                                "via": event["via"],
+                                "reason": "classe alvo fora das fontes",
+                                "text": intent["targetType"],
+                            }
+                        )
+                    continue
+                if intent.get("targetName"):
+                    name, origin = value_of(intent["targetName"], node)
+                    name = (package + name if name and name.startswith(".") else name or "").replace("$", ".")
+                    if name in symbols:
+                        add(node["id"], name, "launches", event, "medium", targetFrom=origin)  # class name as string
+                    else:
+                        unresolved.append(
+                            {
+                                "line": event["line"],
+                                "via": event["via"],
+                                "reason": "nome de classe não resolvido",
+                                "text": name or origin,
+                            }
+                        )
+                    continue
+                if intent.get("action"):
+                    action, origin = value_of(intent["action"], node)
+                    if action is None:
+                        unresolved.append(
+                            {
+                                "line": event["line"],
+                                "via": event["via"],
+                                "reason": "ação não resolvida (dinâmica)",
+                                "text": origin,
+                            }
+                        )
+                    elif action in actions:
+                        for component in actions[action]:
+                            add(
+                                node["id"],
+                                component["class"],
+                                "sends_action",
+                                event,
+                                "medium",
+                                action=action,
+                                component=component["name"],
+                            )
+                    else:
+                        unresolved.append(
+                            {
+                                "line": event["line"],
+                                "via": event["via"],
+                                "reason": "nenhum intent-filter do Manifest declara esta ação",
+                                "action": action,
+                            }
+                        )
+                    continue
+                unresolved.append(
+                    {
+                        "line": event["line"],
+                        "via": event["via"],
+                        "reason": "Intent sem alvo nem ação",
+                        "text": event["argument"],
+                    }
+                )
+            if unresolved:
+                node["intents"] = {"unresolved": unresolved[:50], "unresolvedTotal": len(unresolved)}
+            component = node.get("component")
+            if component and component.get("deepLinks"):
+                node["deepLinkHandler"] = True
+        return edges
 
     def _evaluate_rules(self):
         """Run the rules on every project class. Findings are candidates, sorted by severity."""
