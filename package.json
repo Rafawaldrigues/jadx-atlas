@@ -5,7 +5,7 @@
   "description": "Explorador local de herança e interfaces em código Java exportado pelo JADX",
   "scripts": {
     "vendor": "node scripts/vendor.mjs",
-    "check": "node --check web/app.js"
+    "check": "node --check atlas/web/app.js"
   },
   "dependencies": {
     "cytoscape": "3.33.1",

@@ -1,5 +1,5 @@
 import { mkdir, copyFile } from 'node:fs/promises';
-await mkdir('web/vendor', { recursive: true });
+await mkdir('atlas/web/vendor', { recursive: true });
 for (const [source, target] of [
   ['cytoscape/dist/cytoscape.min.js', 'cytoscape.min.js'],
   ['dagre/dist/dagre.min.js', 'dagre.min.js'],
@@ -7,4 +7,4 @@ for (const [source, target] of [
   ['cytoscape/LICENSE', 'cytoscape-LICENSE'],
   ['dagre/LICENSE', 'dagre-LICENSE'],
   ['cytoscape-dagre/LICENSE', 'cytoscape-dagre-LICENSE'],
-]) await copyFile(`node_modules/${source}`, `web/vendor/${target}`);
+]) await copyFile(`node_modules/${source}`, `atlas/web/vendor/${target}`);
