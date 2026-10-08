@@ -31,3 +31,19 @@
 - MobSF não foi usado. O aapt2 lê o mesmo binário que o instalador do Android lê.
 
 **Limitação desta validação:** o app é sintético e pequeno. A conferência em um app real de terceiros (open source ou de CTF) fica pendente.
+
+## Fase 2 · Papéis por herança (2026-10-08)
+
+**Mesmo APK sintético e mesma exportação da Fase 1.**
+
+| Critério | Resultado |
+|---|---|
+| Todas as activities do Manifest (4 activities + 1 alias → `InternalActivity`) têm papel `activity` | 5/5, confiança `high` (`roleCheck`) |
+| Nenhuma classe sem ancestral de Activity recebe o papel | 0 classes extras |
+| Services, receivers, providers e Application | 2, 2 (incluindo `Outer.InnerReceiver`), 2 e 1, todos com `high` |
+
+**Demonstração (AndroidX):** `CheckoutActivity → BaseActivity → AppCompatActivity → FragmentActivity → androidx.activity.ComponentActivity → androidx.core.app.ComponentActivity → Activity` (alta). `BaseActivity` (abstrata, não declarada) é marcada como `undeclaredComponent`, só como informação.
+
+**Conferência da tabela:** `python scripts/framework_hierarchy.py --check` → "framework_hierarchy.json confere com javap" (76 tipos, 13 fontes).
+
+A conferência automática fica em `tests/test_jadx_integration.py::ApkManifestIntegrationTests`. Os casos sintéticos (ofuscação, ciclos, ambiguidade, coincidência de nome curto) ficam em `tests/test_roles.py`.

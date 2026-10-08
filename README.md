@@ -43,6 +43,10 @@ Quando a exportação do JADX inclui recursos (sem `--no-res`), o Atlas lê `res
 
 Tudo isso é **candidato a revisão**, não veredicto. O Manifest é lido como entrada hostil: DTD e entidades são recusados, e há limites de tamanho e profundidade. O Manifest binário (AXML) não é decodificado. Validação em [docs/VALIDATION.md](docs/VALIDATION.md).
 
+## Papéis por herança
+
+Cada classe recebe papéis (Activity, Service, Receiver, Provider, Application, Fragment, TrustManager, HostnameVerifier, WebViewClient, WebChromeClient, SSLSocketFactory, AsyncTask, Parcelable, Serializable) pela **cadeia de ancestrais**, inclusive quando os nomes são ofuscados (`a.b.c (Activity)`). Depois do código do app, a cadeia continua por uma tabela de tipos do Android, do AndroidX e da support library, gerada com `javap` a partir dos artefatos oficiais (`atlas/data/framework_hierarchy.json`, com a versão de cada tipo). Cada papel mostra o caminho percorrido e a confiança: uma referência ambígua no meio do caminho a rebaixa. O papel é conferido com o Manifest: se um componente declarado não tem o ancestral esperado, aparece um aviso de "possível erro de resolução".
+
 ## Explorar
 
 - **Busca**: localiza pelo nome da classe, nome completo, pacote ou caminho do arquivo. Atalho `/`.
