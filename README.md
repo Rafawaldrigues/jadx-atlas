@@ -32,6 +32,17 @@ Use `--no-browser` para não abrir o navegador e `--port 8766` para trocar a por
 
 O Atlas percorre as subpastas e mostra o progresso. Uma importação com erro ou cancelada mantém o projeto anterior. O APK não é aberto diretamente por esta versão.
 
+## Superfície de ataque (AndroidManifest)
+
+Quando a exportação do JADX inclui recursos (sem `--no-res`), o Atlas lê `resources/AndroidManifest.xml` (ou `--manifest <arquivo>`) e liga cada componente à sua classe no grafo:
+
+- **Exportação efetiva**, sempre com o motivo: explícita, implícita por intent-filter (targetSdk < 31), padrão antigo de provider (targetSdk < 17) e assim por diante, seguindo as regras do AOSP.
+- **Valores que não dá para saber com certeza** ficam como *desconhecido* (`@bool/...`) ou *inconsistente*, mas recebem um **palpite** com a origem (por exemplo `@bool/x = true em res/values/bools.xml`). Na interface aparecem como "potencialmente exportado" e `EXP?`.
+- Permissões (inclusive a herdada de `<application>`), `protectionLevel` das permissões do próprio app, providers avaliados pelo lado mais fraco (leitura ou escrita) e deep links (`VIEW` + `BROWSABLE` + `scheme`).
+- Painel **Superfície** com os componentes ordenados por exposição e **Alertas do app** (`debuggable`, `allowBackup`, `usesCleartextTraffic`, `testOnly`). Filtros "Exportado", "Deep link", "Sem permissão" e "Tipo". Nós exportados têm borda dupla e o marcador `⇥`.
+
+Tudo isso é **candidato a revisão**, não veredicto. O Manifest é lido como entrada hostil: DTD e entidades são recusados, e há limites de tamanho e profundidade. O Manifest binário (AXML) não é decodificado. Validação em [docs/VALIDATION.md](docs/VALIDATION.md).
+
 ## Explorar
 
 - **Busca**: localiza pelo nome da classe, nome completo, pacote ou caminho do arquivo. Atalho `/`.

@@ -37,3 +37,37 @@ Formato: contexto, decisão, alternativas consideradas. Decisões novas entram n
 ## D-007 · Gerador sintético com nomes seguros (Fase 0)
 
 - **Decisão:** `scripts/gen_large_project.py` usa só letras minúsculas nos nomes ofuscados, para não colidir em sistemas de arquivos que ignoram maiúsculas. O primeiro segmento dos pacotes ofuscados leva um dígito (`a3.k`), para nunca coincidir com um nome de classe e não criar FQNs obscurecidos (JLS §6.4.2). O gerador só apaga uma pasta que contenha o marcador `.atlas-generated`.
+
+## D-008 · Onde o JADX grava o Manifest (Fase 1, passo 0)
+
+- **Verificado** com JADX 1.5.6 e um APK sintético (`tests/apk/testapp`): `jadx -d out app.apk` grava `out/resources/AndroidManifest.xml` (XML de texto, namespace `android:`, com `uses-sdk`) e `out/resources/res/values/*.xml`. Com `--no-res`, `out/resources/` fica vazia.
+- O JADX expande nomes relativos de `activity`, `service`, `receiver` e `provider`, mas **não** os de `activity-alias` (`android:name` e `targetActivity` continuam com `.Nome`). Ele também escreve classes aninhadas como `Outer.Inner` em vez de `Outer$Inner`.
+- Atributos que apontam para recurso continuam como referência (`@bool/x`), e o valor fica em `res/values*/bools.xml`.
+- **Decisão:** o localizador procura `P/resources/`, `P/../resources/` e `P/` (apktool), nessa ordem. A normalização aceita `.Nome`, `Nome`, `a.b.Nome` e `$`.
+
+## D-009 · Regras da plataforma conferidas no AOSP (Fase 1)
+
+Fonte: `frameworks/base/core/java/com/android/internal/pm/pkg/component/` (branch `main`, lida em 2026-10-08).
+- Provider sem `exported`: o padrão é `targetSdkVersion < 17` (`ParsedProviderUtils`). Os filtros não influenciam.
+- Activity e receiver sem `exported`: exportados se houver intent-filter. Um filtro **sem `<action>` é descartado** (`failOnNoActions=true`) e não conta. Com targetSdk ≥ 31 a instalação falha (`MISSING_EXPORTED_FLAG`).
+- Service: o mesmo, mas um filtro sem `<action>` **conta** (`failOnNoActions=false`).
+- Permissão: activity, service e receiver herdam `<application android:permission>`; **activity-alias não herda**; provider usa `readPermission`/`writePermission`, depois `permission`, depois a da aplicação.
+
+## D-010 · Valor desconhecido ainda leva um palpite (Fase 1)
+
+- **Contexto:** `exported` ou `enabled` podem apontar para um recurso (`@bool/x`), e o Manifest pode ser inconsistente (sem `exported`, com filtro, targetSdk ≥ 31).
+- **Decisão:** o valor fica `"unknown"` ou `"inconsistent"`, nunca é inventado, mas o componente carrega `exportedGuess` e `exportedGuessReason`:
+  - recurso encontrado com um único valor → palpite = esse valor;
+  - recurso que varia por configuração → palpite = a leitura mais exposta (`true` para `exported`), com a lista de variantes;
+  - recurso não encontrado → palpite pela regra implícita, explicitando isso;
+  - inconsistente com `minSdk < 31` → palpite `true` (em aparelhos antigos ele instala e fica exportado implicitamente).
+- A confiança desses casos é `low`. A interface diz "potencialmente exportado" e "EXP?", e eles entram no filtro "Exportado" e em `stats.potentiallyExported`, mas **nunca** em `stats.exportedComponents`.
+
+## D-011 · Ausência de Manifest não é aviso (Fase 1)
+
+- **Contexto:** analisar uma pasta só com Java continua sendo um uso válido, e um teste antigo conta os avisos exatamente.
+- **Decisão:** a ausência fica em `stats.manifest = "missing"`, e a interface mostra uma faixa explicando. Um Manifest encontrado mas recusado (DTD, tamanho, AXML) gera aviso e `stats.manifest = "invalid"`. Um caminho informado explicitamente (`--manifest` ou o campo do diálogo) que falha interrompe a importação com erro.
+
+## D-012 · SAX do defusedxml em vez de ElementTree (Fase 1)
+
+- O ElementTree acelerado em C não informa números de linha, e a linha do componente é a evidência exigida pela regra 1. O `defusedxml.sax` com `forbid_dtd`, `forbid_entities` e `forbid_external` dá o locator de linha, e os limites de profundidade e de elementos são aplicados durante a leitura.
