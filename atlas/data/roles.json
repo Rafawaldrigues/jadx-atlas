@@ -1,0 +1,20 @@
+{
+  "_comment": "Role -> framework types that define it. A class gets the role when one of these types is a transitive ancestor (see atlas/roles.py). Order is display priority.",
+  "version": 1,
+  "roles": [
+    {"id": "activity", "label": "Activity", "component": "activity", "types": ["android.app.Activity"]},
+    {"id": "service", "label": "Service", "component": "service", "types": ["android.app.Service"]},
+    {"id": "receiver", "label": "Receiver", "component": "receiver", "types": ["android.content.BroadcastReceiver"]},
+    {"id": "provider", "label": "Provider", "component": "provider", "types": ["android.content.ContentProvider"]},
+    {"id": "application", "label": "Application", "types": ["android.app.Application"]},
+    {"id": "fragment", "label": "Fragment", "types": ["android.app.Fragment", "androidx.fragment.app.Fragment", "android.support.v4.app.Fragment"]},
+    {"id": "trust_manager", "label": "TrustManager", "types": ["javax.net.ssl.TrustManager"]},
+    {"id": "hostname_verifier", "label": "HostnameVerifier", "types": ["javax.net.ssl.HostnameVerifier"]},
+    {"id": "webview_client", "label": "WebViewClient", "types": ["android.webkit.WebViewClient"]},
+    {"id": "webchrome_client", "label": "WebChromeClient", "types": ["android.webkit.WebChromeClient"]},
+    {"id": "ssl_socket_factory", "label": "SSLSocketFactory", "types": ["javax.net.ssl.SSLSocketFactory"]},
+    {"id": "async_task", "label": "AsyncTask", "types": ["android.os.AsyncTask"]},
+    {"id": "parcelable", "label": "Parcelable", "types": ["android.os.Parcelable"]},
+    {"id": "serializable", "label": "Serializable", "types": ["java.io.Serializable"]}
+  ]
+}
