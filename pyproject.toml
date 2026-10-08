@@ -14,6 +14,7 @@ requires-python = ">=3.10"
 dependencies = [
     "tree-sitter>=0.25.2,<0.26",
     "tree-sitter-java>=0.23.5,<0.24",
+    "defusedxml>=0.7.1,<0.8",
 ]
 keywords = ["android", "jadx", "reverse-engineering", "static-analysis", "mobile-security"]
 classifiers = [
@@ -42,7 +43,7 @@ version = { attr = "atlas.__version__" }
 include = ["atlas*"]
 
 [tool.setuptools.package-data]
-atlas = ["web/*", "web/vendor/*", "examples/**/*.java"]
+atlas = ["web/*", "web/vendor/*", "examples/**/*.java", "examples/**/*.xml"]
 
 [tool.ruff]
 line-length = 120
