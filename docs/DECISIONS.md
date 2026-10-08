@@ -71,3 +71,19 @@ Fonte: `frameworks/base/core/java/com/android/internal/pm/pkg/component/` (branc
 ## D-012 · SAX do defusedxml em vez de ElementTree (Fase 1)
 
 - O ElementTree acelerado em C não informa números de linha, e a linha do componente é a evidência exigida pela regra 1. O `defusedxml.sax` com `forbid_dtd`, `forbid_entities` e `forbid_external` dá o locator de linha, e os limites de profundidade e de elementos são aplicados durante a leitura.
+
+## D-013 · Tabela de framework gerada por `javap` (Fase 2)
+
+- **Contexto:** cada cadeia precisava ser verificada nas fontes do SDK ou do AndroidX, com a versão registrada.
+- **Decisão:** `atlas/data/framework_hierarchy.json` é **gerado** por `scripts/framework_hierarchy.py` a partir do `javap`, aplicado ao `android.jar` da plataforma `android-37.0` (com `--system none`, para que `java.*` e `javax.*` venham do android.jar e não do JDK local) e aos `classes.jar` de AARs oficiais do Google Maven: appcompat 1.7.0, fragment 1.8.5, activity 1.9.3, core 1.13.1, legacy-support-core-utils 1.0.0, lifecycle-service 2.8.7, multidex 2.0.1, firebase-messaging 24.1.0 e support library 28.0.0. Cada tipo guarda `source`, e `--check` refaz a conferência. O `android-36` instalado não tem `android.jar` (instalação parcial), por isso foi usado o 37.0.
+- **Correções em relação ao esperado:** a cadeia do AppCompat tem **dois** `ComponentActivity` (`androidx.activity` → `androidx.core.app`). `FirebaseMessagingService` passa por `EnhancedIntentService`. `WakefulBroadcastReceiver` (AndroidX) fica em `androidx.legacy.content`.
+- **Limitação:** outras versões de bibliotecas podem ter cadeias diferentes. Uma classe incluída nas fontes do APK (por exemplo, androidx empacotado) é descrita pelas próprias arestas, não pela tabela.
+- **Alternativas:** escrever a tabela à mão (sem verificação) ou ler fontes do AndroidX (não estavam disponíveis localmente).
+
+## D-014 · Cálculo de papéis (Fase 2)
+
+- Busca a partir dos tipos que definem cada papel, descendo pelas arestas invertidas (projeto + tabela), com Dijkstra pela chave (maior confiança, menor profundidade). O conjunto de visitados garante término com ciclos. O custo é O(papéis × arestas); em 20 mil classes sintéticas, 0,05 s.
+- A confiança do caminho é a da aresta mais fraca: `resolved`/`external`/framework = `high`; `ambiguous` com 2 candidatos = `medium`, com mais = `low` (cada candidato é seguido). `unresolved` interrompe o caminho. Nunca há junção por nome curto.
+- Papéis só vão para classes do projeto, nunca para nós externos. `node.roles = [{role, label, confidence, path, via}]`.
+- Cruzamento com o Manifest: `component.roleCheck` = confiança do papel esperado ou `"missing"`, este último com aviso "possível erro de resolução". Classe com ancestral de componente mas não declarada recebe `undeclaredComponent` (só informação).
+- Nós externos presentes na tabela recebem o `kind` real (`interface`, `abstract`) e a `framework` de origem.
