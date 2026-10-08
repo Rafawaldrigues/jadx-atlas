@@ -15,6 +15,7 @@ from tree_sitter import Language, Parser
 import tree_sitter_java
 
 from . import manifest as manifest_module
+from . import roles as roles_module
 
 JAVA = Language(tree_sitter_java.language())
 KINDS = {
@@ -28,8 +29,9 @@ JAVA_LANG = set(
     "Object String Number Boolean Byte Short Integer Long Float Double Character Void Throwable Exception RuntimeException Error Enum Record Class Comparable CharSequence Cloneable Runnable AutoCloseable Iterable Thread StringBuilder StringBuffer Math System Override Deprecated SuppressWarnings FunctionalInterface AssertionError IllegalArgumentException IllegalStateException NullPointerException UnsupportedOperationException".split()
 )
 MAX_FILE_BYTES = 8 * 1024 * 1024
-# 1: original payload. 2: adds schemaVersion, manifest, node.component and manifest stats.
-SCHEMA_VERSION = 2
+# 1: original payload. 2: schemaVersion, manifest, node.component, manifest stats.
+# 3: node.roles, node.framework, stats.roles, component.roleCheck.
+SCHEMA_VERSION = 3
 NODE_COMPONENT_KEYS = (
     "type",
     "name",
@@ -287,6 +289,16 @@ class Project:
             for key in list(node):
                 if key.startswith("_"):
                     del node[key]
+        for node in self.nodes.values():
+            if node["external"]:
+                kind, source = roles_module.framework_kind(node["id"])
+                if kind:  # the javap-generated table knows the real kind and package
+                    node.update(
+                        kind="interface" if kind == "interface" else "class",
+                        abstract=kind == "abstract class",
+                        framework=source,
+                    )
+        role_counts = roles_module.assign(self.nodes, self.edges)
         manifest_data, manifest_status = self._attach_manifest(manifest, warnings)
         components = manifest_data["components"] if manifest_data else []
         self.payload = {
@@ -317,10 +329,45 @@ class Project:
                 ),
                 "deepLinks": sum(len(c["deepLinks"]) for c in components),
                 "componentsWithoutClass": sum(1 for c in components if c["class"] is None),
+                "roles": role_counts,
+                "undeclaredComponentClasses": sum(1 for n in self.nodes.values() if n.get("undeclaredComponent")),
                 "seconds": round(time.perf_counter() - started, 2),
             },
             "manifest": manifest_data,
         }
+
+    def _check_roles(self, data, warnings):
+        """Manifest says what a class must be; the ancestor chain says what it is. Disagreement = review."""
+        expected = {
+            "activity": "activity",
+            "activity-alias": "activity",
+            "service": "service",
+            "receiver": "receiver",
+            "provider": "provider",
+        }
+        for component in data["components"]:
+            node = self.nodes.get(component["class"]) if component["class"] else None
+            if not node:
+                continue
+            role = next((r for r in node.get("roles", []) if r["role"] == expected[component["type"]]), None)
+            component["roleCheck"] = role["confidence"] if role else "missing"
+            if not role:
+                warnings.append(
+                    {
+                        "path": data["path"],
+                        "message": f"{component['name']} é declarado como {component['type']}, mas a cadeia de herança de {component['class']} não chega ao tipo esperado: possível erro de resolução ou classe base fora da tabela de framework.",
+                    }
+                )
+        declared = {c["class"] for c in data["components"] if c["class"]} | {data["application"]["name"]}
+        component_roles = {"activity", "service", "receiver", "provider"}
+        for node in self.nodes.values():
+            # Information only: abstract or base classes are often not declared.
+            if (
+                not node["external"]
+                and node["id"] not in declared
+                and any(r["role"] in component_roles for r in node.get("roles", []))
+            ):
+                node["undeclaredComponent"] = True
 
     def _attach_manifest(self, explicit, warnings):
         """Locate, parse and link the AndroidManifest. Returns (manifest or None, status)."""
@@ -361,6 +408,7 @@ class Project:
             if current is None or component["exposure"] < current["exposure"]:
                 node["component"] = summary
             node.setdefault("declaredAs", []).append(component["name"])
+        self._check_roles(data, warnings)
         app_class = data["application"]["name"]
         if app_class and app_class in self.nodes and not self.nodes[app_class]["external"]:
             self.nodes[app_class]["applicationClass"] = True

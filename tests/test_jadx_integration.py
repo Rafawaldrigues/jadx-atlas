@@ -86,6 +86,13 @@ class ApkManifestIntegrationTests(unittest.TestCase):
             self.assertEqual(manifest["targetSdk"], 30)
             self.assertIs(manifest["application"]["debuggable"]["value"], True)
             self.assertEqual(project.payload["stats"]["deepLinks"], 2)
+            # Phase 2 acceptance: every declared activity has the activity role with high confidence, and nothing else does.
+            activities = [c for c in manifest["components"] if c["type"] in {"activity", "activity-alias"}]
+            self.assertTrue(all(c["roleCheck"] == "high" for c in activities))
+            with_role = {
+                n["id"] for n in project.nodes.values() if any(r["role"] == "activity" for r in n.get("roles", []))
+            }
+            self.assertEqual(with_role, {c["class"] for c in activities})
 
 
 if __name__ == "__main__":
