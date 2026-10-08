@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#E8E8E8">
+  <title>JADX Atlas — Mapa de classes</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="asmx.css">
+  <script src="vendor/cytoscape.min.js" defer></script>
+  <script src="vendor/dagre.min.js" defer></script>
+  <script src="vendor/cytoscape-dagre.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="JADX Atlas, início"><img src="icon.svg" alt=""><span>JADX <strong>ATLAS</strong><small>CODE EXPLORER</small></span></a>
+    <div class="project-heading"><span class="folder-icon">▱</span><span id="project-name">Carregando projeto…</span><span id="demo-badge" class="badge">DEMO</span></div>
+    <div class="header-actions"><span class="local-status"><i></i> Ambiente local</span><button id="open-project" class="primary"><span>＋</span> Abrir projeto</button></div>
+  </header>
+
+  <div class="workspace">
+    <aside class="sidebar" aria-label="Explorador de classes">
+      <div class="sidebar-heading"><span>EXPLORADOR</span><span id="file-count" class="dim"></span></div>
+      <label class="search-box"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Buscar classe ou pacote…" aria-label="Buscar classe ou pacote" autocomplete="off"><kbd>/</kbd></label>
+      <div class="list-tabs" role="group" aria-label="Filtrar tipos"><button class="active" data-kind="all">Todos</button><button data-kind="class">Classes</button><button data-kind="interface">Interfaces</button></div>
+      <div class="list-caption"><span>Pacotes e declarações</span><span id="search-count"></span></div>
+      <div id="class-list" class="class-list"></div>
+      <div class="sidebar-footer"><span class="local-lock">◇</span><div>O código fica nesta máquina.<small>Leitura local · sem envio para a nuvem</small></div></div>
+    </aside>
+
+    <main>
+      <div class="main-heading"><div><div class="eyebrow">PROJETO <span>/</span> ESTRUTURA</div><h1>Mapa de classes<span class="heading-dot">.</span></h1><p>Da visão geral até a linha de código.</p></div><button id="export-graph" class="subtle" title="Exportar o índice completo em JSON">↓ Exportar mapa</button></div>
+      <div class="metrics"><div><strong id="stat-types">—</strong><span>declarações</span></div><div><strong id="stat-relations">—</strong><span>relações</span></div><div><strong id="stat-packages">—</strong><span>pacotes</span></div><button id="show-warnings" class="metric-warning"><strong id="stat-warnings">—</strong><span>avisos de análise ↗</span></button></div>
+      <section class="graph-shell" aria-label="Mapa interativo de herança">
+        <div class="graph-toolbar"><div class="segmented" role="group" aria-label="Modo do mapa"><button id="mode-all" class="active">Visão geral</button><button id="mode-focus">Foco na classe</button></div><label class="package-filter"><span class="sr-only">Filtrar mapa por pacote</span><select id="package-filter"><option value="">Todos os pacotes</option></select></label><button id="reset-filters" class="icon-button" title="Redefinir filtros" aria-label="Redefinir filtros">↺</button></div>
+        <div id="focus-controls" class="focus-controls" hidden><select id="direction" aria-label="Direção das relações"><option value="both">Ambos os sentidos</option><option value="parents">Ancestrais</option><option value="children">Descendentes</option></select><label>Profundidade <select id="depth" aria-label="Profundidade"><option selected>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label><button id="expand-depth" class="subtle">＋ Expandir</button><button id="full-hierarchy" class="subtle" title="Mostrar todos os ancestrais e interfaces da classe selecionada">↑ Herança completa</button></div>
+        <div class="graph-legend"><label><input id="show-extends" type="checkbox" checked><span class="legend-line"></span> extends</label><label><input id="show-implements" type="checkbox" checked><span class="legend-line purple"></span> implements</label><label><input id="show-external" type="checkbox" checked> Referências externas</label></div>
+        <div id="graph" tabindex="0" aria-label="Grafo interativo. Arraste o fundo para mover, use a roda para zoom e as setas do teclado para navegar."></div>
+        <div id="graph-empty" class="graph-empty" hidden><span>⌕</span><strong>Nenhuma classe nesta visualização</strong><p>Ajuste os filtros ou selecione outra classe.</p><button id="empty-reset" class="primary">Redefinir filtros</button></div>
+        <div class="graph-controls" aria-label="Controles do mapa">
+          <div class="pan-pad" aria-label="Mover mapa"><button id="pan-up" aria-label="Mover para cima" title="Mover para cima (↑)">↑</button><button id="pan-left" aria-label="Mover para esquerda" title="Mover para esquerda (←)">←</button><button id="center-selected" aria-label="Centralizar classe selecionada" title="Centralizar classe selecionada (C)">◎</button><button id="pan-right" aria-label="Mover para direita" title="Mover para direita (→)">→</button><button id="pan-down" aria-label="Mover para baixo" title="Mover para baixo (↓)">↓</button></div>
+          <div class="zoom-strip"><button id="zoom-out" aria-label="Diminuir zoom" title="Diminuir zoom (-)">−</button><input id="zoom-range" type="range" min="4" max="250" value="100" aria-label="Nível de zoom"><output id="zoom-value" for="zoom-range">100%</output><button id="zoom-in" aria-label="Aumentar zoom" title="Aumentar zoom (+)">＋</button></div>
+          <div class="view-actions"><button id="fit" aria-label="Ajustar mapa à tela" title="Ajustar tudo à tela (0)">⛶</button><button id="layout" aria-label="Reorganizar mapa" title="Reorganizar mapa">↻</button></div>
+        </div>
+        <div class="graph-tip">Arraste o fundo para mover <span>·</span> Roda para zoom <span>·</span> Duplo clique para focar <span>·</span> Tecla H mostra toda a herança</div>
+        <div class="graph-footer"><span><i class="status-dot"></i><span id="visible-count">Preparando mapa…</span></span><span id="graph-status">Setas apontam para o tipo pai</span></div>
+      </section>
+      <div class="bottom-note"><span id="analysis-info">Analisando estrutura…</span><span>Classes <i class="square green"></i> Interfaces <i class="square purple"></i> Externas <i class="square grey"></i></span></div>
+    </main>
+
+    <aside class="inspector" aria-label="Detalhes da classe selecionada">
+      <div class="inspector-top"><span>INSPECIONAR CLASSE</span><button id="back" class="icon-button" aria-label="Voltar à classe anterior" title="Voltar à classe anterior" disabled>←</button></div>
+      <div id="details" class="details"><div class="empty-details">Selecione uma classe no mapa ou no explorador.</div></div>
+    </aside>
+  </div>
+
+  <dialog id="import-dialog"><form id="import-form"><div class="dialog-heading"><div class="eyebrow">NOVO PROJETO</div><button type="button" class="icon-button close-dialog" aria-label="Fechar">×</button></div><h2>Explore seu código.</h2><p>Informe a pasta de arquivos <code>.java</code> exportada pelo JADX. As subpastas serão lidas automaticamente.</p><label class="field-label" for="project-path">Caminho da pasta</label><input id="project-path" class="path-input" placeholder="/home/usuario/app-descompilado/sources" required autocomplete="off"><div class="import-hint">No JADX: <strong>Salvar tudo</strong> e selecione a pasta <code>sources</code> gerada.<br>Ou no terminal: <code>jadx -d saida aplicativo.apk</code></div><div id="import-error" class="error-box" role="alert" hidden></div><div id="import-progress" hidden><div class="progress-label"><span id="progress-text">Procurando arquivos…</span><span id="progress-count"></span></div><progress id="progress-bar" max="100" value="0"></progress><button type="button" id="cancel-import" class="subtle">Cancelar importação</button></div><div class="dialog-actions"><button type="button" id="load-demo" class="subtle">Abrir demonstração</button><button type="submit" id="submit-import" class="primary">Analisar pasta <span>→</span></button></div></form></dialog>
+
+  <dialog id="source-dialog" class="source-dialog"><div class="source-heading"><div><div class="eyebrow">CÓDIGO-FONTE EXPORTADO</div><h2 id="source-title"></h2><p id="source-path"></p></div><div class="source-actions"><button id="jump-declaration" class="subtle">Ir à declaração</button><button id="copy-source" class="subtle">Copiar código</button><button class="icon-button close-dialog" aria-label="Fechar código">×</button></div></div><div id="source-code" class="source-code"></div><div id="source-notice" class="source-notice">A linha da declaração está destacada. Visualização somente para leitura.</div></dialog>
+  <dialog id="warnings-dialog"><div class="dialog-heading"><div class="eyebrow">QUALIDADE DA ANÁLISE</div><button class="icon-button close-dialog" aria-label="Fechar avisos">×</button></div><h2>Avisos da importação</h2><p>Referências incertas permanecem identificadas no mapa.</p><div id="warnings-list"></div></dialog>
+  <div id="toast" role="status" hidden></div>
+</body>
+</html>
