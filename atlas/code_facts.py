@@ -389,8 +389,71 @@ def collect(language, tree, data, declarations, index):
         owner["_facts"].append(event)
 
     captures = QueryCursor(_query(language)).captures(tree.root_node)
+    flows = {}
+
+    def flow_for(node):
+        body = enclosing_method_body(node)
+        if body is None:
+            return None
+        key = (body.start_byte, body.end_byte)
+        if key not in flows:
+            flows[key] = _MethodFlow(body)
+        return flows[key]
+
     for name_node in captures.get("call", ()):
         method = text(name_node)
+        if method in INTENT_SINKS or method == "registerReceiver" or method in INTENT_READS:
+            call = name_node.parent
+            arguments = call.child_by_field_name("arguments")
+            args = (
+                [a for a in arguments.named_children if a.type not in {"line_comment", "block_comment"}]
+                if arguments
+                else []
+            )
+            if method in INTENT_READS:
+                emit(call, {"kind": "reads-intent"})
+            elif method == "registerReceiver" and len(args) >= 2:
+                constants = constants_for(call)
+                receiver_arg, flow = args[0], flow_for(call)
+                receiver_type = (
+                    raw_type_text(receiver_arg.child_by_field_name("type"))
+                    if receiver_arg.type == "object_creation_expression"
+                    else None
+                )
+                if receiver_type is None and receiver_arg.type == "identifier":
+                    declared = variable_type(call, text(receiver_arg), field_cache)
+                    receiver_type = None if declared in {None, "?"} else declared
+                    exact = False
+                else:
+                    exact = receiver_type is not None
+                emit(
+                    call,
+                    {
+                        "kind": "register",
+                        "receiverType": receiver_type,
+                        "exact": exact,
+                        "actions": _filter_actions(args[1], call.start_byte, flow, constants),
+                        "text": text(receiver_arg, 60),
+                    },
+                )
+            elif method in INTENT_SINKS and len(args) > INTENT_SINKS[method]:
+                receiver = call.child_by_field_name("object")
+                pending = method in PENDING_INTENT_SINKS
+                if pending and (receiver is None or text(receiver).rsplit(".", 1)[-1] != "PendingIntent"):
+                    pass  # Fragment.getActivity() and friends are not Intent sinks
+                else:
+                    constants = constants_for(call)
+                    intent = _describe_intent(args[INTENT_SINKS[method]], call.start_byte, flow_for(call), constants)
+                    via = f"PendingIntent.{method}" if pending else method
+                    emit(
+                        call,
+                        {
+                            "kind": "intent",
+                            "via": via,
+                            "intent": intent,
+                            "argument": text(args[INTENT_SINKS[method]], 60),
+                        },
+                    )
         if method not in index.call_methods:
             continue
         call = name_node.parent
@@ -441,6 +504,13 @@ def collect(language, tree, data, declarations, index):
                 else 0,
             },
         )
+    # Project-wide string constants (for `Actions.GO` style references resolved after indexing).
+    for declaration in declarations:
+        node = tree.root_node.descendant_for_byte_range(declaration["_start"], declaration["_end"])
+        body = node.child_by_field_name("body") if node is not None else None
+        declaration["_string_constants"] = (
+            {k: v["value"] for k, v in _constants(body).items() if v["kind"] == "string"} if body is not None else {}
+        )
     if index.string_patterns:
         for literal in captures.get("string", ()):
             if _inside_annotation(literal):
@@ -466,3 +536,219 @@ def _inside_annotation(node):
 
 def compile_identifier_pattern(names):
     return re.compile(rb"\b(?:" + b"|".join(re.escape(n.encode()) for n in sorted(names)) + rb")\b")
+
+
+# --- Intents (phase 4): simple intra-method flow, no interprocedural analysis -------------------
+INTENT_SINKS = {
+    "startActivity": 0,
+    "startActivityForResult": 0,
+    "startActivityIfNeeded": 0,
+    "startService": 0,
+    "startForegroundService": 0,
+    "bindService": 0,
+    "sendBroadcast": 0,
+    "sendOrderedBroadcast": 0,
+    "sendStickyBroadcast": 0,
+    "getActivity": 2,
+    "getService": 2,
+    "getBroadcast": 2,
+    "getForegroundService": 2,
+}
+PENDING_INTENT_SINKS = {"getActivity", "getService", "getBroadcast", "getForegroundService"}
+INTENT_MUTATORS = {"setClass", "setClassName", "setComponent", "setAction", "setPackage"}
+INTENT_READS = {"getIntent"}
+
+
+def _class_literal(node):
+    """`X.class` → "X" (type text) or None."""
+    if node is not None and node.type == "class_literal":
+        return raw_type_text(node.named_children[0]) if node.named_children else None
+    return None
+
+
+def _value(node, constants):
+    """String value (or a reference to resolve later) for an action/class-name argument."""
+    argument = _argument(node, constants)
+    if argument["kind"] == "string":
+        return {"value": argument["value"], **({"constant": argument["constant"]} if "constant" in argument else {})}
+    if argument["kind"] == "field":
+        return {"reference": argument["text"]}  # e.g. Actions.GO: resolved against project constants later
+    return {"unresolved": argument.get("text", argument["kind"])}
+
+
+def _apply(intent, method, args, constants):
+    """Apply an Intent constructor/mutator call to the description."""
+    if method == "setClass" and len(args) == 2:
+        intent["targetType"] = _class_literal(args[1]) or intent.get("targetType")
+    elif method == "setClassName" and len(args) == 2:
+        intent["targetName"] = _value(args[1], constants)
+    elif method == "setComponent" and args:
+        component = args[0]
+        if component.type == "object_creation_expression" and raw_type_text(
+            component.child_by_field_name("type")
+        ).endswith("ComponentName"):
+            inner = component.child_by_field_name("arguments")
+            inner = (
+                [a for a in inner.named_children if a.type not in {"line_comment", "block_comment"}] if inner else []
+            )
+            if len(inner) == 2:
+                literal = _class_literal(inner[1])
+                if literal:
+                    intent["targetType"] = literal
+                else:
+                    intent["targetName"] = _value(inner[1], constants)
+        else:
+            intent["targetName"] = {"unresolved": text(component, 60)}
+    elif method == "setAction" and args:
+        intent["action"] = _value(args[0], constants)
+    elif method == "setPackage" and args:
+        intent["package"] = _value(args[0], constants)
+
+
+def _intent_from_creation(node, constants):
+    args = node.child_by_field_name("arguments")
+    args = [a for a in args.named_children if a.type not in {"line_comment", "block_comment"}] if args else []
+    intent = {}
+    if len(args) == 2 and _class_literal(args[1]):
+        intent["targetType"] = _class_literal(args[1])  # Intent(Context, Class)
+    elif len(args) == 4 and _class_literal(args[3]):
+        intent["targetType"] = _class_literal(args[3])  # Intent(String action, Uri, Context, Class)
+        intent["action"] = _value(args[0], constants)
+    elif args:
+        # Intent(String action[, Uri]); a plain variable may also be Intent(Intent): the value stays unresolved.
+        intent["action"] = _value(args[0], constants)
+    return intent
+
+
+class _MethodFlow:
+    """Bindings and mutations of Intent/IntentFilter variables in one method, in document order."""
+
+    def __init__(self, body):
+        self.events = []  # (start_byte, kind, name, node)
+        stack = [body]
+        while stack:
+            node = stack.pop()
+            if node.type == "local_variable_declaration":
+                for name, declarator in _declarator_names(node):
+                    value = declarator.child_by_field_name("value")
+                    if value is not None:
+                        self.events.append((node.start_byte, "bind", name, value))
+            elif node.type == "assignment_expression":
+                left = node.child_by_field_name("left")
+                if left is not None and left.type == "identifier":
+                    self.events.append((node.start_byte, "bind", text(left), node.child_by_field_name("right")))
+            elif node.type == "method_invocation":
+                target, name = node.child_by_field_name("object"), node.child_by_field_name("name")
+                if target is not None and target.type == "identifier" and name is not None:
+                    self.events.append((node.start_byte, "call", text(target), node))
+            if node.type not in {"class_body"}:
+                stack.extend(node.named_children)
+        self.events.sort(key=lambda e: e[0])
+
+    def history(self, name, before):
+        """Latest binding of `name` before `before`, then the calls on it until `before`."""
+        bound, calls = None, []
+        for start, kind, variable, node in self.events:
+            if start >= before:
+                break
+            if variable != name:
+                continue
+            if kind == "bind":
+                bound, calls = node, []
+            elif bound is not None:
+                calls.append(node)
+        return bound, calls
+
+
+def _describe_intent(expression, before, flow, constants, depth=0):
+    """Intent description for an argument expression, or None when it is not traceable here."""
+    if expression is None or depth > 8:
+        return None
+    if expression.type == "parenthesized_expression" and expression.named_children:
+        return _describe_intent(expression.named_children[0], before, flow, constants, depth + 1)
+    if expression.type == "cast_expression":
+        return _describe_intent(expression.child_by_field_name("value"), before, flow, constants, depth + 1)
+    if expression.type == "object_creation_expression":
+        if (raw_type_text(expression.child_by_field_name("type")) or "").rsplit(".", 1)[-1] != "Intent":
+            return None
+        return _intent_from_creation(expression, constants)
+    if expression.type == "method_invocation":
+        # Chained builder: new Intent(...).setAction(...).putExtra(...)
+        name = text(expression.child_by_field_name("name"))
+        base = _describe_intent(expression.child_by_field_name("object"), before, flow, constants, depth + 1)
+        if base is not None and name in INTENT_MUTATORS | {
+            "putExtra",
+            "putExtras",
+            "addFlags",
+            "setFlags",
+            "setData",
+            "setDataAndType",
+            "addCategory",
+            "setType",
+        }:
+            arguments = expression.child_by_field_name("arguments")
+            _apply(
+                base,
+                name,
+                [a for a in arguments.named_children if a.type not in {"line_comment", "block_comment"}]
+                if arguments
+                else [],
+                constants,
+            )
+            return base
+        return None
+    if expression.type == "identifier" and flow is not None:
+        bound, calls = flow.history(text(expression), before)
+        intent = (
+            _describe_intent(bound, bound.start_byte if bound is not None else before, flow, constants, depth + 1)
+            if bound is not None
+            else None
+        )
+        if intent is None:
+            return None
+        for call in calls:
+            name = text(call.child_by_field_name("name"))
+            arguments = call.child_by_field_name("arguments")
+            _apply(
+                intent,
+                name,
+                [a for a in arguments.named_children if a.type not in {"line_comment", "block_comment"}]
+                if arguments
+                else [],
+                constants,
+            )
+        return intent
+    return None
+
+
+def _filter_actions(expression, before, flow, constants):
+    """Actions of an IntentFilter argument: new IntentFilter("a") and filter.addAction("b") in the method."""
+    if expression is None:
+        return None
+    if expression.type == "object_creation_expression":
+        args = expression.child_by_field_name("arguments")
+        args = [a for a in args.named_children if a.type not in {"line_comment", "block_comment"}] if args else []
+        return [_value(args[0], constants)] if args else []
+    if expression.type == "identifier" and flow is not None:
+        bound, calls = flow.history(text(expression), before)
+        actions = _filter_actions(bound, before, flow, constants) if bound is not None else None
+        if actions is None:
+            return None
+        for call in calls:
+            if text(call.child_by_field_name("name")) == "addAction":
+                arguments = call.child_by_field_name("arguments")
+                if arguments is not None and arguments.named_children:
+                    actions.append(_value(arguments.named_children[0], constants))
+        return actions
+    return None
+
+
+def enclosing_method_body(node):
+    current = node.parent
+    while current is not None:
+        if current.type in {"method_declaration", "constructor_declaration", "lambda_expression"}:
+            return current.child_by_field_name("body")
+        if current.type in CLASS_BODIES:
+            return None  # field initialiser: no method flow
+        current = current.parent
+    return None
