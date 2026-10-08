@@ -102,3 +102,49 @@ def assign(nodes, edges):
 def framework_kind(type_id):
     info = framework()["types"].get(type_id)
     return (info["kind"], info["source"]) if info else (None, None)
+
+
+class Hierarchy:
+    """Memoised ancestor sets over project edges plus the framework table (any confidence)."""
+
+    def __init__(self, nodes, edges):
+        self.links = parent_links(nodes, edges)
+        self.cache = {}
+        self.role_types = {}
+        for role in roles():
+            for type_id in role["types"]:
+                self.role_types.setdefault(type_id, set()).add(role["id"])
+
+    def ancestors(self, type_id):
+        if type_id not in self.cache:
+            seen, stack = set(), [type_id]
+            while stack:
+                for parent, _, _ in self.links.get(stack.pop(), ()):
+                    if parent not in seen:
+                        seen.add(parent)
+                        stack.append(parent)
+            seen.discard(type_id)
+            self.cache[type_id] = seen
+        return self.cache[type_id]
+
+    def has_superclass(self, type_id):
+        return any(via == "extends" or via.startswith("extends ") for _, _, via in self.links.get(type_id, ()))
+
+    def class_chain_known(self, type_id):
+        """True when a framework *class* is an ancestor, i.e. the superclass chain ends in known territory."""
+        types = framework()["types"]
+        return any(types.get(a, {}).get("kind", "interface") != "interface" for a in self.ancestors(type_id))
+
+    def roles_of(self, type_id):
+        found = set()
+        for candidate in self.ancestors(type_id) | {type_id}:
+            found |= self.role_types.get(candidate, set())
+        return found
+
+    def roles_by_short_name(self, name):
+        short = name.rsplit(".", 1)[-1]
+        found = set()
+        for type_id in framework()["types"]:
+            if type_id.rsplit(".", 1)[-1] == short:
+                found |= self.roles_of(type_id)
+        return found

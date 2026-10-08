@@ -7,6 +7,7 @@ represented explicitly instead of being joined using a global short-name match.
 from __future__ import annotations
 
 from collections import defaultdict
+import json
 import os
 from pathlib import Path
 import time
@@ -14,8 +15,10 @@ import time
 from tree_sitter import Language, Parser
 import tree_sitter_java
 
+from . import code_facts
 from . import manifest as manifest_module
 from . import roles as roles_module
+from . import rules as rules_module
 
 JAVA = Language(tree_sitter_java.language())
 KINDS = {
@@ -25,13 +28,18 @@ KINDS = {
     "record_declaration": "record",
     "annotation_type_declaration": "annotation",
 }
+# Implicit java.lang imports, generated from android.jar (scripts/framework_hierarchy.py); the
+# original hand-written names stay for non-Android Java sources (e.g. Record).
 JAVA_LANG = set(
+    json.loads((Path(__file__).resolve().parent / "data" / "java_lang.json").read_text(encoding="utf-8"))["types"]
+) | set(
     "Object String Number Boolean Byte Short Integer Long Float Double Character Void Throwable Exception RuntimeException Error Enum Record Class Comparable CharSequence Cloneable Runnable AutoCloseable Iterable Thread StringBuilder StringBuffer Math System Override Deprecated SuppressWarnings FunctionalInterface AssertionError IllegalArgumentException IllegalStateException NullPointerException UnsupportedOperationException".split()
 )
 MAX_FILE_BYTES = 8 * 1024 * 1024
 # 1: original payload. 2: schemaVersion, manifest, node.component, manifest stats.
 # 3: node.roles, node.framework, stats.roles, component.roleCheck.
-SCHEMA_VERSION = 3
+# 4: findings, rules, node.findings, stats.findings.
+SCHEMA_VERSION = 4
 NODE_COMPONENT_KEYS = (
     "type",
     "name",
@@ -65,7 +73,8 @@ def raw_type(node):
     return value(node)
 
 
-def parse_file(data: bytes, path: str):
+def parse_file(data: bytes, path: str, rule_index=None):
+    """Declarations of one file. With `rule_index`, also attach `_facts` for the rules (same tree, no reparse)."""
     tree = Parser(JAVA).parse(data)
     package, imports, wildcards = "", defaultdict(list), []
     for child in tree.root_node.named_children:
@@ -125,6 +134,8 @@ def parse_file(data: bytes, path: str):
                         "_imports": dict(imports),
                         "_wildcards": wildcards,
                         "_refs": refs,
+                        "_start": node.start_byte,
+                        "_end": node.end_byte,
                     }
                 )
                 if body:
@@ -134,6 +145,11 @@ def parse_file(data: bytes, path: str):
             # Method-local and anonymous classes do not have stable source FQNs.
 
     visit(tree.root_node)
+    if rule_index is not None:
+        code_facts.collect(JAVA, tree, data, declarations, rule_index)
+        if tree.root_node.has_error:
+            for declaration in declarations:
+                declaration["_partial"] = True
     return declarations, tree.root_node.has_error
 
 
@@ -168,6 +184,11 @@ def resolve(name, owner, symbols):
         return target, "resolved" if target in symbols else "external", []
     if len(candidates) > 1:
         return None, "ambiguous", candidates
+    # A single wildcard import of a framework package that is known to contain the type (javap table).
+    if "." not in name and len(owner["_wildcards"]) == 1:
+        candidate = f"{owner['_wildcards'][0]}.{name}"
+        if candidate in roles_module.framework()["types"]:
+            return candidate, "external", []
     # JADX normally writes imports or fully qualified names for external types.
     if "." in name and first[:1].islower():
         return name, "external", []
@@ -179,7 +200,9 @@ class Cancelled(Exception):
 
 
 class Project:
-    def __init__(self, root, progress=lambda *_: None, cancelled=lambda: False, demo=False, manifest=None):
+    def __init__(
+        self, root, progress=lambda *_: None, cancelled=lambda: False, demo=False, manifest=None, findings=True
+    ):
         started = time.perf_counter()
         self.root = Path(root).expanduser().resolve()
         if not self.root.is_dir():
@@ -213,7 +236,7 @@ class Project:
                 if stat.st_size > MAX_FILE_BYTES:
                     raise ValueError("Arquivo maior que 8 MiB; ignorado")
                 data = file.read_bytes()
-                classes, has_error = parse_file(data, relative)
+                classes, has_error = parse_file(data, relative, rules_module.default_index() if findings else None)
                 self.files[relative] = (stat.st_mtime_ns, stat.st_size)
                 if has_error:
                     parse_errors += 1
@@ -286,10 +309,6 @@ class Project:
                     }
                 )
         for node in self.nodes.values():
-            for key in list(node):
-                if key.startswith("_"):
-                    del node[key]
-        for node in self.nodes.values():
             if node["external"]:
                 kind, source = roles_module.framework_kind(node["id"])
                 if kind:  # the javap-generated table knows the real kind and package
@@ -301,6 +320,13 @@ class Project:
         role_counts = roles_module.assign(self.nodes, self.edges)
         manifest_data, manifest_status = self._attach_manifest(manifest, warnings)
         components = manifest_data["components"] if manifest_data else []
+        self.findings = self._evaluate_rules() if findings else []
+        for node in self.nodes.values():
+            for key in [key for key in node if key.startswith("_")]:
+                del node[key]
+        severity_counts = {severity: 0 for severity in rules_module.SEVERITIES}
+        for finding in self.findings:
+            severity_counts[finding["severity"]] += 1
         self.payload = {
             "schemaVersion": SCHEMA_VERSION,
             "name": "Pedidos · demonstração" if demo else self.root.name,
@@ -330,11 +356,37 @@ class Project:
                 "deepLinks": sum(len(c["deepLinks"]) for c in components),
                 "componentsWithoutClass": sum(1 for c in components if c["class"] is None),
                 "roles": role_counts,
+                "findings": severity_counts,
                 "undeclaredComponentClasses": sum(1 for n in self.nodes.values() if n.get("undeclaredComponent")),
                 "seconds": round(time.perf_counter() - started, 2),
             },
             "manifest": manifest_data,
+            "findings": self.findings,
+            "rules": [rules_module.summary(rule) for rule in rules_module.load_rules()] if findings else [],
         }
+
+    def _evaluate_rules(self):
+        """Run the rules on every project class. Findings are candidates, sorted by severity."""
+        evaluator = rules_module.Evaluator(self.nodes, resolve, roles_module.Hierarchy(self.nodes, self.edges))
+        found = []
+        for node in self.nodes.values():
+            if node["external"] or not node.get("_facts"):
+                continue
+            component = node.get("component")
+            exposed = bool(component) and (
+                component["exported"] is True
+                or (component["exported"] in {"unknown", "inconsistent"} and component.get("exportedGuess") is True)
+            )
+            results = evaluator.evaluate(node, exposed)
+            if results:
+                counts = {}
+                for result in results:
+                    counts[result["severity"]] = counts.get(result["severity"], 0) + 1
+                node["findings"] = counts
+                found.extend(results)
+        rank = {severity: index for index, severity in enumerate(rules_module.SEVERITIES)}
+        found.sort(key=lambda f: (-rank[f["severity"]], f["classId"], f["line"], f["ruleId"]))
+        return found
 
     def _check_roles(self, data, warnings):
         """Manifest says what a class must be; the ancestor chain says what it is. Disagreement = review."""
