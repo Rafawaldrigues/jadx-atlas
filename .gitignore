@@ -1,6 +1,27 @@
+# Python
 .venv/
-node_modules/
+venv/
 __pycache__/
 *.pyc
+*.egg-info/
+build/
+dist/
 .pytest_cache/
+.ruff_cache/
+
+# Node (web/vendor is committed; node_modules is only needed to regenerate it)
+node_modules/
+
+# Local artifacts: generated projects, JADX exports, APKs
 artifacts/
+*.apk
+*.aab
+*.dex
+jadx-out/
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
