@@ -82,6 +82,22 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 404)
         error.exception.close()
 
+    def test_project_payload_has_schema_version_and_demo_manifest(self):
+        project = self.get("/api/project")
+        self.assertEqual(project["schemaVersion"], 2)
+        self.assertEqual(project["manifest"]["package"], "br.exemplo.pedidos")
+
+    def test_import_rejects_non_string_manifest(self):
+        request = Request(
+            self.url + "/api/import",
+            data=json.dumps({"path": "/tmp", "manifest": ["x"]}).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        with self.assertRaises(HTTPError) as error:
+            urlopen(request)
+        self.assertEqual(error.exception.code, 400)
+        error.exception.close()
+
 
 if __name__ == "__main__":
     unittest.main()
