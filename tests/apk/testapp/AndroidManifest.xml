@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Synthetic app written for JADX Atlas validation. Every exported-rule branch has one component. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="br.atlas.testapp" android:versionCode="3" android:versionName="1.0.3">
+
+    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="30" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <permission android:name="br.atlas.testapp.permission.SYNC" android:protectionLevel="signature" />
+    <permission android:name="br.atlas.testapp.permission.READ_DATA" android:protectionLevel="normal" />
+
+    <application android:name=".AtlasApp" android:label="Atlas Test" android:debuggable="true"
+        android:allowBackup="true" android:usesCleartextTraffic="true">
+
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- No android:exported + intent-filter + targetSdk 30: implicitly exported deep link. -->
+        <activity android:name=".DeepLinkActivity">
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="atlas.example" android:pathPrefix="/open" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="atlas" />
+            </intent-filter>
+        </activity>
+
+        <activity android:name=".InternalActivity" android:exported="false" />
+
+        <!-- exported comes from a resource: the tool must say "unknown" and give a guess. -->
+        <activity android:name="br.atlas.testapp.ResourceActivity" android:exported="@bool/export_resource">
+            <intent-filter>
+                <action android:name="br.atlas.testapp.action.RESOURCE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity-alias android:name=".AliasLauncher" android:targetActivity=".InternalActivity" android:exported="true" />
+
+        <service android:name=".SyncService" android:exported="true" android:permission="br.atlas.testapp.permission.SYNC" />
+        <service android:name=".LocalService" />
+
+        <receiver android:name=".BootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name="br.atlas.testapp.Outer$InnerReceiver" android:exported="true" />
+        <!-- Declared but intentionally not compiled: must appear with class null. -->
+        <receiver android:name=".MissingReceiver" android:exported="true" />
+
+        <provider android:name=".DataProvider" android:authorities="br.atlas.testapp.data"
+            android:exported="true" android:readPermission="br.atlas.testapp.permission.READ_DATA"
+            android:grantUriPermissions="true" />
+        <provider android:name=".LegacyProvider" android:authorities="br.atlas.testapp.legacy" />
+    </application>
+</manifest>
