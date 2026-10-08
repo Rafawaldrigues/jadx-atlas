@@ -12,7 +12,7 @@ const LIMIT = 600;
 const state = { project: null, nodes: new Map(), incoming: new Map(), outgoing: new Map(), selected: null,
   kind: 'all', query: '', mode: 'all', history: [], listLimit: 200, revision: -1,
   source: '', sourceLine: 1, sourceRequest: 0, busy: false, collapsed: new Set(), fullHierarchy: false,
-  surface: { exported: false, deeplink: false, noperm: false, type: '' }, panel: 'class' };
+  surface: { exported: false, deeplink: false, noperm: false, type: '' }, role: '', panel: 'class' };
 let cy;
 let toastTimer;
 
@@ -56,6 +56,13 @@ function exposureLabel(component) {
   return 'não exportado';
 }
 
+// Roles are inferred from the ancestor chain (atlas/roles.py); the first one is the most specific for display.
+function primaryRole(node) { return node.roles?.[0]; }
+
+function looksObfuscated(name) { return name.length <= 3 || /^[a-z]{1,3}(\$[a-z0-9]{1,3})*$/.test(name); }
+
+function matchesRole(node) { return !state.role || Boolean(node.roles?.some(r => r.role === state.role)); }
+
 function surfaceFilterActive() { return state.surface.exported || state.surface.deeplink || state.surface.noperm || Boolean(state.surface.type); }
 
 function matchesSurface(node) {
@@ -95,6 +102,7 @@ async function loadProject() {
   $('#analysis-info').textContent = `Indexado em ${project.stats.seconds.toLocaleString('pt-BR')} s · ${project.stats.external} referências externas`;
   $('#project-path').value = project.demo ? '' : project.root;
   renderSurfaceChrome();
+  renderRoleFilter();
   const filter = $('#package-filter');
   filter.replaceChildren(new Option('Todos os pacotes', ''));
   [...new Set(project.nodes.filter(n => !n.external).map(n => n.package))].sort().forEach(p => filter.add(new Option(p || '(sem pacote)', p || '__default')));
@@ -144,7 +152,7 @@ function renderList() {
   if (!state.project) return;
   const matches = state.project.nodes.filter(n => !n.external &&
     (state.kind === 'all' || (state.kind === 'interface' ? ['interface', 'annotation'].includes(n.kind) : !['interface', 'annotation'].includes(n.kind))) &&
-    `${n.id} ${n.path}`.toLowerCase().includes(state.query) && matchesSurface(n));
+    `${n.id} ${n.path}`.toLowerCase().includes(state.query) && matchesSurface(n) && matchesRole(n));
   matches.sort((a, b) => a.id.localeCompare(b.id));
   $('#search-count').textContent = matches.length.toLocaleString('pt-BR');
   if (!matches.length) {
@@ -312,6 +320,7 @@ function renderDetails() {
   rootButton.addEventListener('click', goToRootClass);
   hierarchyActions.append(focus, complete, rootButton);
   top.append(hierarchyActions); root.append(top);
+  if (node.roles?.length) root.append(rolesSection(node));
   if (node.component) root.append(componentSection(node));
   else if (node.applicationClass) root.append(make('div', 'external-note', 'Classe Application declarada no AndroidManifest: é executada antes de qualquer componente.'));
   const outgoing = state.outgoing.get(node.id) || [];
@@ -334,6 +343,32 @@ function definition(list, term, value) {
   list.append(make('dt', '', term), make('dd', '', String(value)));
 }
 
+function rolesSection(node) {
+  const section = make('section', 'relations-section roles-section');
+  const title = make('div', 'relations-title');
+  title.append(make('span', '', 'PAPÉIS INFERIDOS PELA HERANÇA'), make('small', '', node.roles.length));
+  section.append(title);
+  for (const role of node.roles) {
+    const row = make('div', `role-row confidence-${role.confidence}`);
+    row.append(make('strong', '', role.label), make('span', 'role-confidence', `confiança ${role.confidence}`));
+    const chain = make('div', 'role-path');
+    role.path.forEach((id, index) => {
+      if (index) chain.append(make('span', 'role-arrow', ` → ${role.via[index - 1].startsWith('framework') ? '' : role.via[index - 1] + ' '}`));
+      const target = state.nodes.get(id);
+      const short = id.split('.').pop();
+      if (target && id !== node.id) {
+        const link = make('button', 'role-link', short);
+        link.title = id; link.addEventListener('click', () => select(id));
+        chain.append(link);
+      } else chain.append(make('span', 'role-step', short));
+    });
+    row.append(chain);
+    section.append(row);
+  }
+  if (node.undeclaredComponent) section.append(make('p', 'relations-empty', 'Tem ancestral de componente, mas não está declarada no AndroidManifest (pode ser classe base ou código não usado).'));
+  return section;
+}
+
 function componentSection(node) {
   const component = node.component;
   const section = make('section', 'relations-section component-section');
@@ -346,6 +381,8 @@ function componentSection(node) {
   definition(list, 'exported', `${component.exported} — ${component.exportedReason}`);
   if ('exportedGuess' in component) definition(list, 'Palpite', `${component.exportedGuess === null ? 'sem palpite' : component.exportedGuess ? 'potencialmente exportado' : 'potencialmente não exportado'} — ${component.exportedGuessReason}`);
   definition(list, 'Confiança', component.confidence);
+  const check = state.project.manifest?.components.find(c => c.class === node.id && c.type === component.type)?.roleCheck;
+  if (check) definition(list, 'Herança confere', check === 'missing' ? 'NÃO — a cadeia não chega ao tipo esperado (possível erro de resolução)' : `sim (confiança ${check})`);
   definition(list, 'Permissão', component.permission ? `${component.permission} (${component.permissionSource === 'application' ? 'herdada de <application>' : 'do componente'})` : 'nenhuma');
   definition(list, 'protectionLevel', component.protectionLevel);
   definition(list, 'enabled', component.enabled);
@@ -426,6 +463,17 @@ function setPanel(panel) {
   if (surface) renderSurface();
 }
 
+function renderRoleFilter() {
+  const counts = state.project.stats.roles || {};
+  const select = $('#filter-role');
+  select.replaceChildren(new Option('Todos os papéis', ''));
+  const labels = new Map();
+  for (const node of state.project.nodes) for (const role of node.roles || []) labels.set(role.role, role.label);
+  for (const [id, label] of labels) select.add(new Option(`${label} (${counts[id] || 0})`, id));
+  state.role = '';
+  $('#role-filter').hidden = labels.size === 0;
+}
+
 function renderSurfaceChrome() {
   const project = state.project;
   const status = project.stats.manifest;
@@ -472,7 +520,7 @@ function visibleGraph() {
     }
   } else {
     const pkg = $('#package-filter').value;
-    ids = new Set(state.project.nodes.filter(n => !n.external && matchesSurface(n) && (!pkg || n.package === (pkg === '__default' ? '' : pkg))).map(n => n.id));
+    ids = new Set(state.project.nodes.filter(n => !n.external && matchesSurface(n) && matchesRole(n) && (!pkg || n.package === (pkg === '__default' ? '' : pkg))).map(n => n.id));
     const seeds = new Set(ids);
     for (const e of edges) if (seeds.has(e.source) && (state.nodes.get(e.target).external || pkg)) ids.add(e.target);
     if (state.selected && !pkg && ($('#show-external').checked || !state.nodes.get(state.selected).external)) ids.add(state.selected);
@@ -494,7 +542,9 @@ function surfaceClass(node) {
 }
 
 function nodeLabel(n) {
-  const name = n.name.length > 27 ? n.name.slice(0, 25) + '…' : n.name;
+  let name = n.name.length > 27 ? n.name.slice(0, 25) + '…' : n.name;
+  const role = primaryRole(n);
+  if (role && looksObfuscated(n.name)) name = `${name} (${role.label})`;
   if (n.external) return `${name}\n↗  ${n.resolution === 'external' ? 'externa' : 'não resolvida'}`;
   // Text marker as well as the double border, so exposure never depends on colour alone.
   let detail = n.kind + (n.abstract ? ' · abstract' : '');
@@ -502,6 +552,7 @@ function nodeLabel(n) {
     const marker = n.component.exported === true ? '⇥ ' : isPotential(n.component) ? '⇥? ' : '';
     detail = `${marker}${n.component.type}${n.component.deepLinks.length ? ' · link' : ''}`;
   } else if (n.applicationClass) detail = 'Application';
+  else if (role) detail += ` · ${role.label}${role.confidence === 'high' ? '' : ' ?'}`;
   return `${name}\n${detail}`;
 }
 
@@ -737,6 +788,7 @@ function setup() {
     state.listLimit = 200; renderList(); if (state.mode === 'all') renderGraph();
   };
   ['filter-exported', 'filter-deeplink', 'filter-noperm', 'filter-component-type'].forEach(id => $('#' + id).addEventListener('change', surfaceChanged));
+  $('#filter-role').addEventListener('change', event => { state.role = event.target.value; state.listLimit = 200; renderList(); if (state.mode === 'all') renderGraph(); });
   $('#jump-declaration').addEventListener('click', jumpDeclaration);
   $('#copy-source').addEventListener('click', async () => { try { await navigator.clipboard.writeText(state.source); toast('Código copiado.'); } catch { toast('O navegador não permitiu copiar. Selecione o texto no painel.'); } });
   $('#export-graph').addEventListener('click', () => {
