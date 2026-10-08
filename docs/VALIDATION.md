@@ -47,3 +47,20 @@
 **Conferência da tabela:** `python scripts/framework_hierarchy.py --check` → "framework_hierarchy.json confere com javap" (76 tipos, 13 fontes).
 
 A conferência automática fica em `tests/test_jadx_integration.py::ApkManifestIntegrationTests`. Os casos sintéticos (ofuscação, ciclos, ambiguidade, coincidência de nome curto) ficam em `tests/test_roles.py`.
+
+## Fase 3 · Uso de APIs sensíveis (2026-10-08)
+
+**Testes de regra:** `tests/test_rules.py` tem um caso positivo e um negativo para **cada** uma das 30 regras (o negativo inclui receptores de outro tipo, argumentos seguros e placeholders), além de casos de confiança, contexto, sombreamento, classes anônimas, arquivo com erro de sintaxe e custo.
+
+**Código real (sem vulnerabilidade plantada):** AndroidX appcompat 1.7.0, core 1.13.1, fragment 1.8.5, activity 1.9.3, firebase-messaging 24.1.0 e support 28.0.0 (appcompat-v7, support-compat), decompilados com JADX 1.5.6: 887 arquivos, 2.032 tipos.
+
+| Regra | Achados | Revisão manual |
+|---|---|---|
+| exec-reflection (info) | 175 | Esperado em bibliotecas (compatibilidade por reflexão). |
+| pendingintent-mutable | 11 | 2 com `high` em `SearchView` (`FLAG_ONE_SHOT` sem `FLAG_IMMUTABLE`, candidatos reais em targetSdk < 31); 9 com `low` (flags vindas de variável ou helper, como `addMutabilityFlags`). |
+| broadcast-without-permission (info) | 2 | `ShortcutManagerCompat`: broadcast com Intent explícito construído antes (falso positivo documentado). |
+| crypto-weak-hash | 1 | `GmsRpc`: SHA-1 para derivar identificador (uso não criptográfico, falso positivo documentado). |
+
+Antes dos ajustes da D-016, a mesma base gerava 3 falsos positivos de criptografia (`getInstance(...)` implícito em `FirebaseMessaging`) e 9 de entropia (strings `@Metadata` do Kotlin). Os dois casos ganharam testes de regressão.
+
+**Desempenho:** 1,0 s sem regras contra 1,44 a 1,56 s com regras (+45 a 55%) nesses 2.032 tipos; detalhes em docs/PERFORMANCE.md.
