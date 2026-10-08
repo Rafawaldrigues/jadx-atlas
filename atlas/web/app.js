@@ -12,7 +12,8 @@ const LIMIT = 600;
 const state = { project: null, nodes: new Map(), incoming: new Map(), outgoing: new Map(), selected: null,
   kind: 'all', query: '', mode: 'all', history: [], listLimit: 200, revision: -1,
   source: '', sourceLine: 1, sourceRequest: 0, busy: false, collapsed: new Set(), fullHierarchy: false,
-  surface: { exported: false, deeplink: false, noperm: false, type: '' }, role: '', panel: 'class', rules: new Map(), sourceFinding: null };
+  surface: { exported: false, deeplink: false, noperm: false, type: '' }, role: '', panel: 'class', rules: new Map(), sourceFinding: null,
+  layer: 'inheritance', intentOut: new Map(), intentIn: new Map() };
 let cy;
 let toastTimer;
 
@@ -87,6 +88,15 @@ async function loadProject() {
     state.incoming.get(edge.target).push(edge);
     state.outgoing.get(edge.source).push(edge);
   }
+  state.intentOut = new Map(); state.intentIn = new Map();
+  for (const edge of project.intentEdges || []) {
+    if (!state.intentOut.has(edge.source)) state.intentOut.set(edge.source, []);
+    if (!state.intentIn.has(edge.target)) state.intentIn.set(edge.target, []);
+    state.intentOut.get(edge.source).push(edge);
+    state.intentIn.get(edge.target).push(edge);
+  }
+  setLayer('inheritance', false);
+  $$('[data-layer]').forEach(button => { button.disabled = !(project.intentEdges || []).length && button.dataset.layer !== 'inheritance'; });
   state.history = []; state.collapsed.clear(); state.listLimit = 200;
   state.query = ''; state.kind = 'all'; $('#search').value = '';
   $$('[data-kind]').forEach(button => button.classList.toggle('active', button.dataset.kind === 'all'));
@@ -299,6 +309,8 @@ function renderDetails() {
   const badges = make('div', 'detail-badges');
   badges.append(make('span', node.kind, kindLabel(node)));
   if (node.abstract) badges.append(make('span', 'neutral', 'abstract'));
+  if (node.readsIntent) badges.append(make('span', 'neutral', 'lê Intent'));
+  if (node.deepLinkHandler) badges.append(make('span', 'neutral', 'deep link'));
   if (node.component) badges.append(make('span', `surface ${surfaceClass(node)}`, node.component.exported === true ? 'EXPORTADO' : isPotential(node.component) ? 'EXPORTADO?' : node.component.type));
   top.append(badges, make('h2', '', node.name), make('p', 'qualified-name', node.id.startsWith('?') ? node.declaration : node.id));
   if (node.path) {
@@ -328,6 +340,7 @@ function renderDetails() {
   hierarchyActions.append(focus, complete, rootButton);
   top.append(hierarchyActions); root.append(top);
   if (node.findings) root.append(findingsSection(node));
+  if (state.intentOut.has(node.id) || state.intentIn.has(node.id) || node.intents) root.append(intentsSection(node));
   if (node.roles?.length) root.append(rolesSection(node));
   if (node.component) root.append(componentSection(node));
   else if (node.applicationClass) root.append(make('div', 'external-note', 'Classe Application declarada no AndroidManifest: é executada antes de qualquer componente.'));
@@ -511,6 +524,33 @@ function renderFindings() {
   if (findings.length > 500) root.append(make('p', 'relations-empty', `Mostrando 500 de ${findings.length}. Use os filtros ou exporte o JSON.`));
 }
 
+function intentsSection(node) {
+  const section = make('section', 'relations-section intents-section');
+  const title = make('div', 'relations-title');
+  const out = state.intentOut.get(node.id) || [], incoming = state.intentIn.get(node.id) || [];
+  title.append(make('span', '', 'INTENTS (FLUXO DENTRO DO MÉTODO)'), make('small', '', out.length + incoming.length));
+  section.append(title);
+  const row = (edge, other, arrow) => {
+    const target = state.nodes.get(other);
+    const button = make('button', 'relation-button intent-row');
+    const text = make('span');
+    const detail = [edge.kind, edge.via, `L${edge.line}`, `confiança ${edge.confidence}`, edge.action && `ação ${edge.action}`, edge.actions?.length && `ações ${edge.actions.join(', ')}`].filter(Boolean).join(' · ');
+    text.append(make('strong', '', `${arrow} ${target?.name || other}`), make('small', '', detail));
+    button.append(text, make('span', 'arrow', '↗'));
+    button.title = other;
+    button.addEventListener('click', () => select(other));
+    return button;
+  };
+  for (const edge of out) section.append(row(edge, edge.target, '→'));
+  for (const edge of incoming) section.append(row(edge, edge.source, '←'));
+  const unresolved = node.intents?.unresolved || [];
+  if (unresolved.length) {
+    section.append(make('div', 'relations-title', `NÃO RESOLVIDOS (${node.intents.unresolvedTotal})`));
+    for (const item of unresolved.slice(0, 20)) section.append(make('p', 'relations-empty', `L${item.line} ${item.via}: ${item.reason}${item.action ? ` — ${item.action}` : ''}${item.text ? ` — ${item.text}` : ''}`));
+  }
+  return section;
+}
+
 function findingsSection(node) {
   const findings = state.project.findings.filter(f => f.classId === node.id);
   const section = make('section', 'relations-section findings-section');
@@ -581,9 +621,19 @@ function renderSurfaceChrome() {
   setPanel(state.panel === 'findings' ? 'findings' : hasManifest && state.panel === 'surface' ? 'surface' : 'class');
 }
 
+function setLayer(layer, render = true) {
+  state.layer = layer;
+  $$('[data-layer]').forEach(button => button.classList.toggle('active', button.dataset.layer === layer));
+  $('#legend-intents').hidden = layer === 'inheritance';
+  if (render) renderGraph();
+}
+
 function visibleGraph() {
+  // Inheritance and Intent edges live in separate payload arrays; the layer picks which ones are drawn.
+  const inheritance = state.layer === 'intents' ? [] : state.project.edges;
+  const intents = state.layer === 'inheritance' ? [] : (state.project.intentEdges || []);
   // Unknown edge kinds (added by later phases) stay visible instead of crashing the map.
-  const edges = state.project.edges.filter(e => ($(`#show-${e.kind}`)?.checked ?? true) &&
+  const edges = [...inheritance, ...intents].filter(e => ($(`#show-${e.kind}`)?.checked ?? true) &&
     ($('#show-external').checked || (!state.nodes.get(e.target).external && !state.nodes.get(e.source).external)));
   let ids;
   if (state.mode === 'focus') {
@@ -647,7 +697,8 @@ function nodeLabel(n) {
 function graphElements(graph) {
   return [
     ...graph.nodes.map(n => ({ data: { id: n.id, label: nodeLabel(n) }, classes: `${n.kind} ${n.external ? 'external' : ''} ${['ambiguous', 'unresolved'].includes(n.resolution) ? 'uncertain' : ''} ${surfaceClass(n)}` })),
-    ...graph.edges.map(e => ({ data: { id: e.id, source: e.source, target: e.target, label: e.kind }, classes: e.kind })),
+    ...graph.edges.map(e => ({ data: { id: e.id, source: e.source, target: e.target, label: e.via ? `${e.via} L${e.line}` : e.kind },
+      classes: `${e.kind}${e.via ? ` intent ${e.confidence}` : ''}` })),
   ];
 }
 
@@ -834,6 +885,9 @@ function setup() {
       { selector: 'node:selected', style: { 'background-color': '#316ac5', 'border-color': '#204a87', 'border-width': 2, 'color': '#ffffff', 'font-weight': 'bold' } },
       { selector: 'edge', style: { 'curve-style': 'bezier', 'width': 1.4, 'line-color': '#204a87', 'target-arrow-color': '#204a87', 'target-arrow-shape': 'triangle', 'arrow-scale': 0.8,
         'label': 'data(label)', 'font-size': 9, 'font-family': 'Consolas, monospace', 'color': '#204a87', 'text-background-color': '#ffffff', 'text-background-opacity': 1, 'text-background-padding': 4, 'text-rotation': 'autorotate', 'text-margin-y': -1, 'overlay-opacity': 0 } },
+      { selector: 'edge.intent', style: { 'line-color': '#a05000', 'target-arrow-color': '#a05000', 'target-arrow-shape': 'vee', 'line-style': 'dashed', 'line-dash-pattern': [8, 4], 'color': '#a05000', 'width': 1.8 } },
+      { selector: 'edge.sends_action', style: { 'line-style': 'dotted', 'line-dash-pattern': [2, 4] } },
+      { selector: 'edge.registers_receiver', style: { 'source-arrow-shape': 'circle', 'source-arrow-color': '#a05000' } },
       { selector: 'edge.implements', style: { 'line-color': '#660099', 'target-arrow-color': '#660099', 'line-style': 'dashed', 'color': '#660099' } },
     ] });
   cy.on('tap', 'node', event => select(event.target.id()));
@@ -871,6 +925,7 @@ function setup() {
   $('#cancel-import').addEventListener('click', async () => { try { await api('/api/cancel', {}); } catch (error) { toast(error.message); } });
   $('#show-warnings').addEventListener('click', showWarnings);
   $('#show-surface').addEventListener('click', () => setPanel('surface'));
+  $$('[data-layer]').forEach(button => button.addEventListener('click', () => setLayer(button.dataset.layer)));
   $('#show-findings').addEventListener('click', () => setPanel('findings'));
   $('#tab-findings').addEventListener('click', () => setPanel('findings'));
   ['filter-severity', 'filter-category', 'filter-confidence'].forEach(id => $('#' + id).addEventListener('change', renderFindings));

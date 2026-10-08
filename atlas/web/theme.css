@@ -98,3 +98,13 @@ dialog{background:#e8e8e8;border:2px solid #a0a0a0;box-shadow:2px 3px 12px #0003
 .code-line.finding-line{background:#ffd8d8;border-left:3px solid #a00000}
 .code-line.finding-line .line-number{background:#ffd8d8;color:#a00000;font-weight:bold}
 .findings-panel[hidden]{display:none}
+
+/* Intent layers (phase 4): dashed/dotted orange with a "vee" arrow, explained in the legend. */
+.segmented.layers{margin-left:4px}
+.segmented.layers button:disabled{opacity:.5;cursor:not-allowed}
+.legend-intents{display:flex;align-items:center;gap:4px;background:#fffffff0;color:#595959;font-size:10px;padding:3px 6px;flex-wrap:wrap}
+.legend-line.intent{border-top:2px dashed #a05000}
+.legend-line.action{border-top:2px dotted #a05000}
+.legend-line.register{border-top:2px dashed #a05000;position:relative}
+.legend-line.register::before{content:"";position:absolute;left:-3px;top:-4px;width:6px;height:6px;border-radius:50%;background:#a05000}
+.intent-row small{white-space:normal;line-height:1.35}
