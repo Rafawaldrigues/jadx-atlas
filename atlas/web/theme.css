@@ -33,3 +33,36 @@ dialog{background:#e8e8e8;border:2px solid #a0a0a0;box-shadow:2px 3px 12px #0003
 
 @media(max-width:1200px){.zoom-strip input[type=range]{width:65px}.graph-tip{display:none}}
 @media(max-width:640px){.graph-controls{gap:3px;bottom:42px;left:6px}.pan-pad{display:none}.zoom-strip input[type=range]{width:55px}.zoom-strip output{width:34px}.view-actions{padding-left:3px}.hierarchy-actions{grid-template-columns:1fr}.hierarchy-actions .focus-class:first-child{grid-column:auto}.focus-controls{flex-wrap:wrap}.focus-controls #full-hierarchy{margin-left:0}.graph-legend{top:121px}}
+
+/* Attack surface (phase 1). Exposure always has a text marker besides colour. */
+.surface-filters{margin:0 8px 8px;padding:5px 7px 7px;border:1px solid #a0a0a0;background:#f6f6f6;display:grid;gap:4px;font-size:11px;color:#202020}
+.surface-filters legend{padding:0 4px;font-size:10px;color:#595959}
+.surface-filters label{display:flex;align-items:center;gap:5px}
+.surface-filters small{color:#595959}
+.surface-filters select{font-size:10px;padding:2px;margin-left:4px}
+.surface-tag{margin-left:auto;font:9px var(--mono);padding:0 3px;border:1px solid #a00000;color:#a00000;background:#fff}
+.surface-tag.potential{border-style:dashed;border-color:#775500;color:#775500}
+.class-row.selected .surface-tag{background:#fff}
+.metric-surface strong{color:#a00000}
+.surface-banner{margin:0 0 8px;padding:6px 9px;border:1px solid #a0a0a0;background:#ffffdf;color:#775500;font-size:11px}
+.legend-surface{display:flex;align-items:center;gap:4px;background:#fffffff0;color:#595959;font-size:10px;padding:3px 6px}
+.legend-box{display:inline-block;width:14px;height:9px;border:3px double #a00000;background:#fff}
+.legend-box.potential{border-color:#775500}
+.inspector-tabs{display:flex;gap:0}
+.inspector-tabs button{background:#e8e8e8;border:1px solid #a0a0a0;color:#595959;font-size:10px;padding:3px 8px;box-shadow:none}
+.inspector-tabs button.active{background:#fff;color:#202020}
+.detail-badges span.surface.exported{color:#a00000;border-color:#a00000}
+.detail-badges span.surface.potential{color:#775500;border-color:#775500;border-style:dashed}
+.exposure-line{font-size:11px;font-weight:600;color:#202020;margin:0 0 6px}
+.exposure-line.exported{color:#a00000}.exposure-line.potential{color:#775500}
+.component-facts{display:grid;grid-template-columns:max-content 1fr;gap:3px 8px;font-size:10px;margin:0 0 8px}
+.component-facts dt{color:#595959}.component-facts dd{margin:0;color:#202020;overflow-wrap:anywhere}
+.deep-link{display:block;font:10px var(--mono);background:#fff;border:1px solid #a0a0a0;padding:3px 5px;margin:3px 0;overflow-wrap:anywhere}
+.filter-box{margin:5px 0;font-size:10px;white-space:pre-wrap}
+.app-alerts{background:#fff;border:1px solid #a0a0a0;padding:8px}
+.alert-item{font-size:11px;color:#775500;margin:4px 0;overflow-wrap:anywhere}
+.alert-item::before{content:"⚠ ";color:#775500}
+.surface-row .surface-marker{font:11px var(--mono);width:22px;color:#595959}
+.surface-row.exported .surface-marker{color:#a00000}.surface-row.potential .surface-marker{color:#775500}
+.surface-row small{white-space:normal;line-height:1.35}
+.surface-panel[hidden],.details[hidden]{display:none}
