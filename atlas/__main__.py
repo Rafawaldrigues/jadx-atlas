@@ -1,4 +1,5 @@
 """Command line entry point: `jadx-atlas [serve] [path]` or `python -m atlas`."""
+
 from __future__ import annotations
 
 import argparse
@@ -11,7 +12,9 @@ COMMANDS = {"serve": (server.add_arguments, server.serve, "Abre a interface loca
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="jadx-atlas", description="JADX Atlas — mapa local de classes Java exportadas pelo JADX")
+    parser = argparse.ArgumentParser(
+        prog="jadx-atlas", description="JADX Atlas — mapa local de classes Java exportadas pelo JADX"
+    )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", metavar="COMANDO")
     for name, (add_arguments, run, help_text) in COMMANDS.items():

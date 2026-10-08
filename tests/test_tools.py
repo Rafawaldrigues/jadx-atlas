@@ -24,7 +24,11 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(project.payload["stats"]["unresolved"], 0)
         self.assertLessEqual(summary["maxDepth"], 4)
         self.assertGreater(summary["shortNameFraction"], 0)
-        parents = {e["source"]: e["target"] for e in project.edges if e["kind"] == "extends" and not project.nodes[e["source"]]["kind"] == "interface"}
+        parents = {
+            e["source"]: e["target"]
+            for e in project.edges
+            if e["kind"] == "extends" and not project.nodes[e["source"]]["kind"] == "interface"
+        }
         for start in parents:
             length, current = 0, start
             while current in parents:
@@ -34,7 +38,10 @@ class GeneratorTests(unittest.TestCase):
     def test_deterministic_for_same_seed(self):
         generate(self.root / "a", classes=120, seed=3)
         generate(self.root / "b", classes=120, seed=3)
-        files = lambda root: {p.relative_to(root): p.read_bytes() for p in root.rglob("*.java")}
+
+        def files(root):
+            return {p.relative_to(root): p.read_bytes() for p in root.rglob("*.java")}
+
         self.assertEqual(files(self.root / "a"), files(self.root / "b"))
 
     def test_refuses_to_delete_foreign_directories(self):
