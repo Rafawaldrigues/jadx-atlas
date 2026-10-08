@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jadx-atlas"
+dynamic = ["version"]
+description = "Local map of Java class hierarchies (and, soon, Android attack surface) from JADX output"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "atlas/web/vendor/*-LICENSE"]
+# tree-sitter 0.25.2 publishes wheels for CPython 3.10 to 3.14.
+requires-python = ">=3.10"
+dependencies = [
+    "tree-sitter>=0.25.2,<0.26",
+    "tree-sitter-java>=0.23.5,<0.24",
+]
+keywords = ["android", "jadx", "reverse-engineering", "static-analysis", "mobile-security"]
+classifiers = [
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Security",
+    "Topic :: Software Development :: Disassemblers",
+]
+
+[project.optional-dependencies]
+dev = ["ruff==0.16.10"]
+
+[project.scripts]
+jadx-atlas = "atlas.__main__:main"
+
+[project.urls]
+Repository = "https://github.com/Rafawaldrigues/JADX-maping"
+
+[tool.setuptools.dynamic]
+version = { attr = "atlas.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["atlas*"]
+
+[tool.setuptools.package-data]
+atlas = ["web/*", "web/vendor/*", "examples/**/*.java"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["artifacts", "atlas/web/vendor"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+# Long Java fixtures in tests and long user-facing messages are clearer on one line.
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
