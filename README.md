@@ -2,23 +2,27 @@
 
 Explorador **local** de herança e interfaces para código Java exportado pelo JADX. Busca classes e pacotes, desenha relações `extends` / `implements` e abre o arquivo na linha da declaração. A interface está em português.
 
-## Iniciar
+> **Uso responsável:** analise apenas aplicativos que você tem autorização para analisar. Veja [SECURITY.md](SECURITY.md).
 
-Requer Python 3.10 ou superior com `venv` e `pip`. Na pasta do projeto:
+## Instalar e iniciar
+
+Requer Python 3.10 ou superior.
 
 ```bash
-./iniciar.sh
+python3 -m venv .venv && . .venv/bin/activate
+pip install -e .
+jadx-atlas
 ```
 
-O navegador abre em **http://127.0.0.1:8765** com uma demonstração fictícia de pedidos. A primeira execução instala duas dependências Python no ambiente `.venv`. As bibliotecas do mapa já estão incluídas em `web/vendor`; depois da instalação, o aplicativo funciona sem internet.
+O navegador abre em **http://127.0.0.1:8765** com uma demonstração fictícia de pedidos. As bibliotecas do mapa já estão incluídas em `atlas/web/vendor`; depois da instalação, o aplicativo funciona sem internet. O atalho `./iniciar.sh` faz os três passos acima.
 
 Também é possível iniciar com uma pasta específica:
 
 ```bash
-./iniciar.sh "/caminho/do/aplicativo/sources"
+jadx-atlas "/caminho/do/aplicativo/sources"
 ```
 
-Use `--no-browser` para não abrir o navegador e `--port 8766` para trocar a porta. Encerre com `Ctrl+C` no terminal.
+Use `--no-browser` para não abrir o navegador e `--port 8766` para trocar a porta (`--port 0` escolhe uma livre). `jadx-atlas serve ...` é a forma explícita do mesmo comando. Encerre com `Ctrl+C` no terminal.
 
 ## Importar um aplicativo
 
@@ -65,9 +69,13 @@ Arquivos maiores que 8 MiB são ignorados com aviso. Links simbólicos, `.git`, 
 ## Desenvolvimento e verificação
 
 ```bash
-.venv/bin/python -m unittest discover -s tests -v
-node --check web/app.js
+pip install -e '.[dev]'
+python -m unittest discover -s tests -v
+ruff check . && ruff format --check .
+npm run check
 ```
+
+O teste de integração com o JADX roda quando `javac`, `jar` e `jadx` estão no `PATH`; caso contrário, é pulado. Para testes de escala, `python scripts/gen_large_project.py --classes 20000 --depth 8 --obfuscated 0.6` gera um projeto sintético em `artifacts/` (pasta ignorada pelo Git).
 
 O servidor usa a biblioteca padrão do Python e só escuta em `127.0.0.1`. Os arquivos do projeto são lidos pelo processo local; não há analytics, CDN ou serviço remoto. Origem e Host são validados nas rotas. Todas as abas abertas compartilham o mesmo projeto em memória. O índice não persiste entre reinicializações; inicie novamente passando a pasta para reabrir o projeto.
 
@@ -78,6 +86,8 @@ npm ci
 npm run vendor
 ```
 
-Estrutura: `atlas/indexer.py` (análise), `app.py` (servidor local), `web/` (interface), `examples/` (demonstração), `tests/` (testes).
+Estrutura: `atlas/indexer.py` (análise), `atlas/server.py` (servidor local), `atlas/__main__.py` (linha de comando), `atlas/web/` (interface), `atlas/examples/` (demonstração), `scripts/` (vendor e gerador sintético), `tests/` (testes), `docs/` (decisões, validação e desempenho).
+
+Licença: [MIT](LICENSE). As bibliotecas em `atlas/web/vendor/` mantêm suas próprias licenças (MIT). Este projeto não é afiliado ao JADX.
 
 Referências: [JADX](https://github.com/skylot/jadx), [Tree-sitter Python](https://github.com/tree-sitter/py-tree-sitter), [Cytoscape.js](https://js.cytoscape.org/) e [Cytoscape Dagre](https://github.com/cytoscape/cytoscape.js-dagre).
