@@ -120,3 +120,15 @@ dialog{background:#e8e8e8;border:2px solid #a0a0a0;box-shadow:2px 3px 12px #0003
 .paths-panel[hidden]{display:none}
 .inspector-tabs{flex-wrap:wrap;row-gap:2px}
 .inspector-tabs button{padding:3px 5px;font-size:9px}
+
+/* Version diff (phase 6) */
+.compare-dialog{width:min(820px,94vw)}
+.compare-direction{border:1px solid #a0a0a0;margin:10px 0;padding:6px 8px;font-size:11px;display:grid;gap:4px}
+.compare-result{max-height:50vh;overflow:auto;margin-top:10px}
+.compare-result h3{font-size:13px;margin:6px 0}
+.compare-list{margin:4px 0 10px;padding-left:18px;font-size:11px}
+.compare-list li{margin:3px 0;overflow-wrap:anywhere}
+.compare-list li.highlight{color:#a00000;font-weight:600}
+.compare-list li.severity-high{color:#a00000}.compare-list li.severity-medium{color:#a05000}
+.compare-triggers{font:11px var(--mono);color:#775500}
+.header-actions{display:flex;gap:8px;align-items:center}

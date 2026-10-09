@@ -16,7 +16,7 @@
   <header class="topbar">
     <a class="brand" href="/" aria-label="JADX Atlas, início"><img src="icon.svg" alt=""><span>JADX <strong>ATLAS</strong><small>CODE EXPLORER</small></span></a>
     <div class="project-heading"><span class="folder-icon">▱</span><span id="project-name">Carregando projeto…</span><span id="demo-badge" class="badge">DEMO</span></div>
-    <div class="header-actions"><span class="local-status"><i></i> Ambiente local</span><button id="open-project" class="primary"><span>＋</span> Abrir projeto</button></div>
+    <div class="header-actions"><span class="local-status"><i></i> Ambiente local</span><button id="open-compare" class="subtle" title="Comparar a superfície de ataque com outra versão do app">⇄ Comparar versões</button><button id="open-project" class="primary"><span>＋</span> Abrir projeto</button></div>
   </header>
 
   <div class="workspace">
@@ -65,6 +65,7 @@
 
   <dialog id="source-dialog" class="source-dialog"><div class="source-heading"><div><div class="eyebrow">CÓDIGO-FONTE EXPORTADO</div><h2 id="source-title"></h2><p id="source-path"></p></div><div class="source-actions"><button id="jump-declaration" class="subtle">Ir à declaração</button><button id="copy-source" class="subtle">Copiar código</button><button class="icon-button close-dialog" aria-label="Fechar código">×</button></div></div><div id="source-finding" class="source-finding" hidden></div><div id="source-code" class="source-code"></div><div id="source-notice" class="source-notice">A linha da declaração está destacada. Visualização somente para leitura.</div></dialog>
   <dialog id="warnings-dialog"><div class="dialog-heading"><div class="eyebrow">QUALIDADE DA ANÁLISE</div><button class="icon-button close-dialog" aria-label="Fechar avisos">×</button></div><h2>Avisos da importação</h2><p>Referências incertas permanecem identificadas no mapa.</p><div id="warnings-list"></div></dialog>
+  <dialog id="compare-dialog" class="compare-dialog"><form id="compare-form"><div class="dialog-heading"><div class="eyebrow">DIFERENÇA ENTRE VERSÕES</div><button type="button" class="icon-button close-dialog" aria-label="Fechar">×</button></div><h2>Comparar com outra versão.</h2><p>Informe a exportação do JADX da outra versão do mesmo app. O projeto aberto continua carregado.</p><label class="field-label" for="compare-path">Pasta da outra versão</label><input id="compare-path" class="path-input" required autocomplete="off" placeholder="/home/usuario/app-v2/sources"><fieldset class="compare-direction"><legend>A outra versão é</legend><label><input type="radio" name="other-is" value="old" checked> mais antiga (mostra o que a versão aberta acrescentou)</label><label><input type="radio" name="other-is" value="new"> mais nova</label></fieldset><div id="compare-error" class="error-box" role="alert" hidden></div><p id="compare-progress" class="relations-empty" aria-live="polite" hidden></p><div class="dialog-actions"><button type="button" id="compare-download" class="subtle" disabled>↓ Relatório .md</button><button type="submit" id="compare-submit" class="primary">Comparar <span>→</span></button></div></form><div id="compare-result" class="compare-result"></div></dialog>
   <div id="toast" role="status" hidden></div>
 </body>
 </html>
