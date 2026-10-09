@@ -83,6 +83,10 @@ jadx-atlas export app/sources --format md --out relatorio.md --apk app.apk
 
 Gera um esqueleto de writeup: rastreabilidade (versão da ferramenta, data, SHA-256 do Manifest e, com `--apk`, do APK), dados do app, superfície de ataque, candidatos por severidade com evidência, caminhos possíveis, metodologia e limitações, e seções para o analista preencher. `--format json` produz o índice completo no formato de [docs/schema/atlas-index.schema.json](docs/schema/atlas-index.schema.json). Segredos ficam mascarados (use `--include-secrets` com cuidado), e `--anonymize` troca pacote, classes e hosts por identificadores estáveis para compartilhar sem expor o alvo. O caminho absoluto da pasta nunca é exportado.
 
+## Código ofuscado
+
+O rodapé estima a ofuscação (fração de classes com nomes de até 2 caracteres). Quando a exportação foi feita com `jadx --deobf`, os comentários `renamed from` e `compiled from` viram aliases pesquisáveis. A busca global (3+ caracteres) procura também em papéis, regras e strings literais (inclusive URLs). "Ocultar bibliotecas" esconde prefixos conhecidos (`atlas/data/libraries.json`) e os que você informar, mas nunca o pacote do app. "Agrupar pacotes" reduz o mapa a um nó por pacote. Apelidos, etiquetas e notas ficam no seu diretório de dados (por exemplo `~/.local/share/jadx-atlas`), nunca dentro da pasta analisada.
+
 ## Explorar
 
 - **Busca**: localiza pelo nome da classe, nome completo, pacote ou caminho do arquivo. Atalho `/`.
