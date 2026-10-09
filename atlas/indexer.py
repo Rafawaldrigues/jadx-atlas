@@ -10,6 +10,7 @@ from collections import defaultdict
 import json
 import os
 from pathlib import Path
+import re
 import time
 
 from tree_sitter import Language, Parser
@@ -76,6 +77,25 @@ def raw_type(node):
     return value(node)
 
 
+# JADX 1.5.x: "/* JADX INFO: renamed from: a.b, reason: ... */"; older versions omit "JADX INFO:".
+RENAMED_FROM = re.compile(r"/\*\s*(?:JADX INFO:\s*)?renamed from:\s*([^,*\s]+)")
+COMPILED_FROM = re.compile(r"/\*\s*(?:JADX INFO:\s*)?compiled from:\s*([^*\s]+)")
+
+
+def jadx_aliases(node):
+    """originalName / sourceFile from the JADX comments just above a declaration."""
+    found, sibling = {}, node.prev_sibling
+    while sibling is not None and sibling.type in {"block_comment", "line_comment"}:
+        text = value(sibling)
+        renamed, compiled = RENAMED_FROM.search(text), COMPILED_FROM.search(text)
+        if renamed:
+            found.setdefault("originalName", renamed.group(1))
+        if compiled:
+            found.setdefault("sourceFile", compiled.group(1))
+        sibling = sibling.prev_sibling
+    return found
+
+
 def parse_file(data: bytes, path: str, rule_index=None):
     """Declarations of one file. With `rule_index`, also attach `_facts` for the rules (same tree, no reparse)."""
     tree = Parser(JAVA).parse(data)
@@ -139,6 +159,7 @@ def parse_file(data: bytes, path: str, rule_index=None):
                         "_refs": refs,
                         "_start": node.start_byte,
                         "_end": node.end_byte,
+                        **jadx_aliases(node),
                     }
                 )
                 if body:
@@ -329,6 +350,8 @@ class Project:
         self.flow = self._flow_graph() if findings else paths_module.FlowGraph()
         entries, targets = self._path_endpoints()
         self.fingerprints = self._fingerprints()
+        self.search_index = self._search_index()
+        obfuscation = self._mark_libraries_and_obfuscation(manifest_data)
         for node in self.nodes.values():
             for key in [key for key in node if key.startswith("_")]:
                 del node[key]
@@ -364,6 +387,8 @@ class Project:
                 "deepLinks": sum(len(c["deepLinks"]) for c in components),
                 "componentsWithoutClass": sum(1 for c in components if c["class"] is None),
                 "roles": role_counts,
+                "obfuscation": obfuscation,
+                "libraryClasses": sum(1 for n in self.nodes.values() if n.get("library")),
                 "findings": severity_counts,
                 "intentEdges": {
                     kind: sum(1 for e in self.intent_edges if e["kind"] == kind)
@@ -381,6 +406,73 @@ class Project:
             "pathTargets": targets,
             "rules": [rules_module.summary(rule) for rule in rules_module.load_rules()] if findings else [],
         }
+
+    def _mark_libraries_and_obfuscation(self, manifest):
+        """node.library for known third-party prefixes (never the app package) and the obfuscation estimate.
+
+        Obfuscation: share of project classes whose simple name has at most 2 characters (`a`, `ab`, `a$b`)
+        or that JADX renamed (originalName). < 10% → baixa, < 40% → média, otherwise alta.
+        """
+        prefixes = json.loads(
+            (Path(__file__).resolve().parent / "data" / "libraries.json").read_text(encoding="utf-8")
+        )["prefixes"]
+        app = (manifest or {}).get("package") or ""
+        own = [n for n in self.nodes.values() if not n["external"]]
+        for node in own:
+            name = node["id"] + "."
+            if any(name.startswith(prefix) for prefix in prefixes) and not (app and name.startswith(app + ".")):
+                node["library"] = True
+        short = [n for n in own if len(n["name"].rsplit("$", 1)[-1]) <= 2 or n.get("originalName")]
+        fraction = len(short) / len(own) if own else 0.0
+        level = "baixa" if fraction < 0.1 else "média" if fraction < 0.4 else "alta"
+        return {"shortNames": len(short), "classes": len(own), "fraction": round(fraction, 3), "level": level}
+
+    def _search_index(self):
+        """Server-side search rows per class (not in the payload): strings, roles, rules, aliases."""
+        rules_by_class = {}
+        for finding in self.findings:
+            rules_by_class.setdefault(finding["classId"], set()).add(finding["ruleId"])
+        index = {}
+        for node in self.nodes.values():
+            if node["external"]:
+                continue
+            index[node["id"]] = {
+                "strings": [s.decode("utf-8", "replace") for s in dict.fromkeys(node.get("_strings", []))],
+                "roles": [r["role"] for r in node.get("roles", ())],
+                "rules": sorted(rules_by_class.get(node["id"], ())),
+            }
+        return index
+
+    def search(self, query, limit=100):
+        """Case-insensitive substring search over names, aliases, packages, roles, rules and strings."""
+        needle = (query or "").strip().lower()
+        if len(needle) < 2:
+            raise ValueError("Digite pelo menos 2 caracteres.")
+        try:
+            limit = max(1, min(int(limit), 500))
+        except ValueError:
+            raise ValueError("limit deve ser um número.") from None
+        priority = {"nome": 0, "alias": 1, "pacote": 2, "papel": 3, "regra": 4, "string": 5}
+        results = []
+        for class_id in sorted(self.search_index):
+            node, row = self.nodes[class_id], self.search_index[class_id]
+            fields = [
+                ("nome", class_id),
+                ("alias", node.get("originalName") or ""),
+                ("alias", node.get("sourceFile") or ""),
+                ("pacote", node["package"]),
+            ]
+            fields += (
+                [("papel", r) for r in row["roles"]]
+                + [("regra", r) for r in row["rules"]]
+                + [("string", s) for s in row["strings"]]
+            )
+            for field, text in fields:
+                if text and needle in text.lower():
+                    results.append({"id": class_id, "field": field, "text": text[:160]})
+                    break  # one row per class: its best field
+        results.sort(key=lambda r: (priority[r["field"]], r["id"]))
+        return {"query": query, "results": results[:limit], "total": len(results)}
 
     def _fingerprints(self):
         """Structural fingerprint per project class, used to pair renamed (obfuscated) classes across versions.
@@ -748,8 +840,20 @@ class Project:
             return None, "invalid"
         for message in data["warnings"]:
             warnings.append({"path": data["path"], "message": message})
+        by_original = {n["originalName"]: n for n in self.nodes.values() if n.get("originalName")}
         for component in data["components"]:
             node = self.nodes.get(component["classId"])
+            if node is None:
+                # R8 can keep `Outer$Inner` as a top-level class (JADX writes the `$`), and JADX --deobf can rename:
+                raw = component["classId"]
+                candidates = [component.get("rawName", "").replace("/", "."), raw]
+                node = (
+                    next((self.nodes[c] for c in candidates if c in self.nodes), None)
+                    or by_original.get(component.get("rawName", ""))
+                    or by_original.get(raw)
+                )
+                if node is not None:
+                    component["classId"] = node["id"]
             # Exact id match only: a short-name coincidence never links a component to a class.
             component["class"] = component["classId"] if node and not node["external"] else None
             if component["class"] is None:

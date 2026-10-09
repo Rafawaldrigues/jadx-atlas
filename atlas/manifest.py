@@ -397,6 +397,7 @@ def parse_manifest(data: bytes, resources=None, label="AndroidManifest.xml"):
         target = qualify(element.get("targetActivity"), package) if element.tag == "activity-alias" else None
         component["targetActivity"] = class_id(target)
         component["classId"] = class_id(target or name)
+        component["rawName"] = target or name  # with `$` kept, for R8 top-level `Outer$Inner` classes
         enabled, _, enabled_reason, enabled_guess, enabled_guess_reason = _tristate(
             element.get("enabled"), True, resources, "enabled"
         )
