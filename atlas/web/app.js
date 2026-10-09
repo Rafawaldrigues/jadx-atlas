@@ -927,6 +927,80 @@ async function pollImport() {
   } catch (error) { importError(error.message); }
 }
 
+// Version diff (phase 6). Renamed obfuscated classes are only "possible matches".
+const DIFF_LABELS = {
+  app: 'Aplicativo', 'app-flag': 'Atributo de <application>', 'permission-added': 'Permissão nova', 'permission-removed': 'Permissão removida',
+  'component-added': 'Componente novo', 'component-removed': 'Componente removido', 'exported-changed': 'Exportação mudou',
+  'permission-changed': 'Permissão do componente mudou', 'deeplink-added': 'Deep link novo', 'deeplink-removed': 'Deep link removido',
+  'filters-changed': 'Ações dos intent-filters mudaram', 'manifest-presence': 'Presença do Manifest',
+};
+
+function otherIs() { return document.querySelector('input[name="other-is"]:checked')?.value || 'old'; }
+
+async function startCompare(event) {
+  event.preventDefault();
+  $('#compare-error').hidden = true;
+  $('#compare-result').replaceChildren();
+  try {
+    await api('/api/compare', { path: $('#compare-path').value });
+    $('#compare-submit').disabled = true;
+    $('#compare-progress').hidden = false;
+    await pollCompare();
+  } catch (error) { compareError(error.message); }
+}
+
+function compareError(message) {
+  $('#compare-submit').disabled = false;
+  $('#compare-progress').hidden = true;
+  $('#compare-error').textContent = message; $('#compare-error').hidden = false;
+}
+
+async function pollCompare() {
+  try {
+    const status = await api('/api/status');
+    $('#compare-progress').textContent = `${status.message}${status.total ? ` · ${status.done} / ${status.total}` : ''}`;
+    if (status.busy) { setTimeout(pollCompare, 350); return; }
+    if (status.error) { compareError(status.error); return; }
+    $('#compare-submit').disabled = false; $('#compare-progress').hidden = true;
+    renderDiff(await api(`/api/diff?otherIs=${otherIs()}`));
+    $('#compare-download').disabled = false;
+  } catch (error) { compareError(error.message); }
+}
+
+function renderDiff(result) {
+  const root = $('#compare-result'); root.replaceChildren();
+  root.append(make('h3', '', `${result.old} → ${result.new}`));
+  if (result.empty) { root.append(make('p', 'clean-state', 'Nenhuma diferença na superfície de ataque, nos candidatos a achado ou na herança dos componentes.')); return; }
+  if (result.triggers.length) root.append(make('p', 'compare-triggers', `Categorias (--fail-on): ${result.triggers.join(', ')}`));
+  const section = (title, items, render) => {
+    if (!items.length) return;
+    root.append(make('div', 'relations-title', `${title} (${items.length})`));
+    const list = make('ul', 'compare-list');
+    for (const item of items) list.append(render(item));
+    root.append(list);
+  };
+  section('MANIFEST', result.manifest, item => {
+    const name = item.name || item.field || '';
+    const change = item.kind === 'component-added' ? `${item.type}, exported=${item.exported}`
+      : item.uri || ('old' in item ? `${JSON.stringify(item.old)} → ${JSON.stringify(item.new)}` : '');
+    return make('li', item.highlight ? 'highlight' : '', `${DIFF_LABELS[item.kind] || item.kind}${item.highlight ? ' (false → true)' : ''}: ${name} ${change}`);
+  });
+  const finding = f => make('li', `severity-${f.severity}`, `${f.severity} (${f.confidence}) · ${ruleOf(f.ruleId).title} · ${f.classId}:${f.line} · ${f.snippet}`);
+  section('CANDIDATOS A ACHADO NOVOS', result.findingsAdded, finding);
+  section('CANDIDATOS A ACHADO REMOVIDOS', result.findingsRemoved, finding);
+  section('HERANÇA DOS COMPONENTES', result.hierarchy, item => make('li', '', `${item.name}: ${item.old.map(i => i.split('.').pop()).join(' → ')} ⇒ ${item.new.map(i => i.split('.').pop()).join(' → ')}`));
+  section('POSSÍVEIS CORRESPONDÊNCIAS (NÃO É PROVA DE EQUIVALÊNCIA)', result.renames, item => make('li', '', `${item.old} → ${item.new} · confiança ${item.confidence} · ${item.reason}`));
+}
+
+async function downloadDiff() {
+  try {
+    const { markdown } = await api(`/api/diff?otherIs=${otherIs()}&format=md`);
+    const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown' }));
+    const link = make('a'); link.href = url; link.download = 'jadx-atlas-diff.md'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) { toast(error.message); }
+}
+
 function showWarnings() {
   const root = $('#warnings-list'); root.replaceChildren();
   const warnings = state.project?.warnings || [];
@@ -1019,6 +1093,10 @@ function setup() {
   $('#load-demo').addEventListener('click', () => importProject(true));
   $('#cancel-import').addEventListener('click', async () => { try { await api('/api/cancel', {}); } catch (error) { toast(error.message); } });
   $('#show-warnings').addEventListener('click', showWarnings);
+  $('#open-compare').addEventListener('click', () => { $('#compare-dialog').showModal(); $('#compare-path').focus(); });
+  $('#compare-form').addEventListener('submit', startCompare);
+  $('#compare-download').addEventListener('click', downloadDiff);
+  $$('input[name="other-is"]').forEach(input => input.addEventListener('change', async () => { if (!$('#compare-download').disabled) { try { renderDiff(await api(`/api/diff?otherIs=${otherIs()}`)); } catch (error) { toast(error.message); } } }));
   $('#show-surface').addEventListener('click', () => setPanel('surface'));
   $$('[data-layer]').forEach(button => button.addEventListener('click', () => setLayer(button.dataset.layer)));
   $('#show-findings').addEventListener('click', () => setPanel('findings'));
