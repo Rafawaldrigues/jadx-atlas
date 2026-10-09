@@ -5,10 +5,13 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import __version__, server
+from . import __version__, diff, server
 
-# `export` and `diff` join this table in phases 6 and 7.
-COMMANDS = {"serve": (server.add_arguments, server.serve, "Abre a interface local (padrão)")}
+# `export` joins this table in phase 7.
+COMMANDS = {
+    "serve": (server.add_arguments, server.serve, "Abre a interface local (padrão)"),
+    "diff": (diff.add_arguments, diff.run, "Compara a superfície de ataque de duas exportações"),
+}
 
 
 def build_parser():

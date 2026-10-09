@@ -327,6 +327,7 @@ class Project:
         self.intent_edges = self._intent_edges(manifest_data) if findings else []
         self.flow = self._flow_graph() if findings else paths_module.FlowGraph()
         entries, targets = self._path_endpoints()
+        self.fingerprints = self._fingerprints()
         for node in self.nodes.values():
             for key in [key for key in node if key.startswith("_")]:
                 del node[key]
@@ -379,6 +380,35 @@ class Project:
             "pathTargets": targets,
             "rules": [rules_module.summary(rule) for rule in rules_module.load_rules()] if findings else [],
         }
+
+    def _fingerprints(self):
+        """Structural fingerprint per project class, used to pair renamed (obfuscated) classes across versions.
+
+        Only rename-stable facts: kind, abstract flag, roles, external (framework/library) parents and the
+        set of string constants. Project-internal parent names are left out because they are renamed too.
+        """
+        prints, external_parents, findings = {}, {}, {}
+        for edge in self.edges:
+            if self.nodes.get(edge["target"], {}).get("external"):
+                external_parents.setdefault(edge["source"], []).append(edge["target"])
+        for finding in self.findings:
+            findings.setdefault(finding["classId"], []).append(finding["ruleId"])
+        for node in self.nodes.values():
+            if node["external"]:
+                continue
+            parents = sorted(external_parents.get(node["id"], []))
+            prints[node["id"]] = {
+                "kind": node["kind"],
+                "abstract": node["abstract"],
+                "roles": sorted(r["role"] for r in node.get("roles", ())),
+                "externalParents": parents,
+                "strings": sorted(
+                    set(node.get("_string_constants", {}).values())
+                    | {e["value"] for e in node.get("_facts", ()) if e["kind"] == "string"}
+                )[:200],
+                "findings": sorted(findings.get(node["id"], [])),
+            }
+        return prints
 
     def _flow_graph(self):
         """Adjacency lists for path search: Intent edges, type references ("uses") and inheritance."""
