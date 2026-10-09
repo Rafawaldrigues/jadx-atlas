@@ -18,6 +18,7 @@ EXPECTED_APK = {
     "br.atlas.testapp.MainActivity": (True, "br.atlas.testapp.MainActivity"),
     "br.atlas.testapp.DeepLinkActivity": (True, "br.atlas.testapp.DeepLinkActivity"),
     "br.atlas.testapp.InternalActivity": (False, "br.atlas.testapp.InternalActivity"),
+    "br.atlas.testapp.PaymentActivity": (False, "br.atlas.testapp.PaymentActivity"),
     "br.atlas.testapp.ResourceActivity": ("unknown", "br.atlas.testapp.ResourceActivity"),
     "br.atlas.testapp.AliasLauncher": (True, "br.atlas.testapp.InternalActivity"),
     "br.atlas.testapp.SyncService": (True, "br.atlas.testapp.SyncService"),
@@ -93,6 +94,20 @@ class ApkManifestIntegrationTests(unittest.TestCase):
                 n["id"] for n in project.nodes.values() if any(r["role"] == "activity" for r in n.get("roles", []))
             }
             self.assertEqual(with_role, {c["class"] for c in activities})
+            # Phase 5 acceptance: the planted chain from the exported deep link to the TrustManager is found.
+            finding = next(f for f in project.findings if f["ruleId"] == "tls-trustmanager-accepts-all")
+            self.assertEqual((finding["classId"], finding["inAnonymous"]), ("br.atlas.testapp.InsecureClient", True))
+            result = project.paths("br.atlas.testapp.DeepLinkActivity")
+            first = [result["entry"], *(s["to"] for s in result["paths"][0]["steps"])]
+            self.assertEqual(
+                first,
+                [
+                    "br.atlas.testapp.DeepLinkActivity",
+                    "br.atlas.testapp.PaymentActivity",
+                    "br.atlas.testapp.InsecureClient",
+                ],
+            )
+            self.assertEqual([s["kind"] for s in result["paths"][0]["steps"]], ["launches", "uses"])
 
 
 if __name__ == "__main__":

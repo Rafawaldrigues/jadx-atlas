@@ -17,6 +17,7 @@ import tree_sitter_java
 
 from . import code_facts
 from . import manifest as manifest_module
+from . import paths as paths_module
 from . import roles as roles_module
 from . import rules as rules_module
 
@@ -40,7 +41,8 @@ MAX_FILE_BYTES = 8 * 1024 * 1024
 # 3: node.roles, node.framework, stats.roles, component.roleCheck.
 # 4: findings, rules, node.findings, stats.findings.
 # 5: intentEdges, node.intents, node.readsIntent, node.deepLinkHandler, stats.intentEdges.
-SCHEMA_VERSION = 5
+# 6: pathEntries, pathTargets, stats.usesEdges (uses edges stay server-side: /api/uses, /api/paths).
+SCHEMA_VERSION = 6
 NODE_COMPONENT_KEYS = (
     "type",
     "name",
@@ -323,6 +325,8 @@ class Project:
         components = manifest_data["components"] if manifest_data else []
         self.findings = self._evaluate_rules() if findings else []
         self.intent_edges = self._intent_edges(manifest_data) if findings else []
+        self.flow = self._flow_graph() if findings else paths_module.FlowGraph()
+        entries, targets = self._path_endpoints()
         for node in self.nodes.values():
             for key in [key for key in node if key.startswith("_")]:
                 del node[key]
@@ -363,6 +367,7 @@ class Project:
                     kind: sum(1 for e in self.intent_edges if e["kind"] == kind)
                     for kind in ("launches", "sends_action", "registers_receiver")
                 },
+                "usesEdges": sum(1 for edges in self.flow.adjacency.values() for e in edges if e[1] == "uses"),
                 "unresolvedIntents": sum(len(n.get("intents", {}).get("unresolved", [])) for n in self.nodes.values()),
                 "undeclaredComponentClasses": sum(1 for n in self.nodes.values() if n.get("undeclaredComponent")),
                 "seconds": round(time.perf_counter() - started, 2),
@@ -370,7 +375,92 @@ class Project:
             "manifest": manifest_data,
             "findings": self.findings,
             "intentEdges": self.intent_edges,
+            "pathEntries": entries,
+            "pathTargets": targets,
             "rules": [rules_module.summary(rule) for rule in rules_module.load_rules()] if findings else [],
+        }
+
+    def _flow_graph(self):
+        """Adjacency lists for path search: Intent edges, type references ("uses") and inheritance."""
+        graph = paths_module.FlowGraph()
+        for edge in self.intent_edges:
+            graph.add(edge["source"], edge["target"], edge["kind"], edge["via"], edge["line"], edge["confidence"])
+        symbols = {key for key, node in self.nodes.items() if not node["external"]}
+        for node in self.nodes.values():
+            if node["external"]:
+                continue
+            for name, line in node.get("_uses", {}).items():
+                target, status, _ = resolve(name, node, symbols)
+                if status == "resolved" and target != node["id"]:
+                    graph.add(node["id"], target, "uses", "referência de tipo", line, "high")
+        for edge in self.edges:
+            if edge["kind"] == "extends" and edge["resolution"] == "resolved":
+                # Inherited code runs as the subclass: walking up is allowed when the caller asks for it.
+                graph.add(
+                    edge["source"], edge["target"], "extends", "herança", self.nodes[edge["source"]]["line"], "high"
+                )
+        return graph.freeze()
+
+    def _path_endpoints(self):
+        """Default entries (exposed components, deep-link handlers, Application) and targets (findings >= medium)."""
+        entries = []
+        for node in self.nodes.values():
+            component = node.get("component")
+            reasons = []
+            if component and (
+                component["exported"] is True
+                or (component["exported"] in {"unknown", "inconsistent"} and component.get("exportedGuess"))
+            ):
+                reasons.append(
+                    f"{component['type']} exportado" + ("" if component["exported"] is True else " (potencialmente)")
+                )
+            if node.get("deepLinkHandler"):
+                reasons.append("deep link")
+            if node.get("applicationClass"):
+                reasons.append("Application")
+            if reasons:
+                entries.append({"id": node["id"], "reasons": reasons})
+        targets = [
+            node["id"]
+            for node in self.nodes.values()
+            if node.get("findings", {}).get("high") or node.get("findings", {}).get("medium")
+        ]
+        return sorted(entries, key=lambda e: e["id"]), sorted(targets)
+
+    def paths(self, entry, target=None, max_depth=6, inheritance=True):
+        """Possible paths from `entry` to `target` (or to every default target)."""
+        if entry not in self.nodes or self.nodes[entry]["external"]:
+            raise ValueError("Entrada desconhecida.")
+        if target is not None and (target not in self.nodes or self.nodes[target]["external"]):
+            raise ValueError("Alvo desconhecido.")
+        targets = [target] if target else self.payload["pathTargets"]
+        kinds = {"launches", "sends_action", "registers_receiver", "uses"} | ({"extends"} if inheritance else set())
+        limits = {"maxDepth": max(1, min(int(max_depth), 10))}
+        result = paths_module.find_paths(self.flow, entry, targets, kinds, limits)
+        for path in result["paths"]:
+            for step in path["steps"]:
+                step["file"] = self.nodes[step["from"]]["path"]
+        result["text"] = paths_module.as_text(result, {k: n["path"] for k, n in self.nodes.items() if n.get("path")})
+        return result
+
+    def uses(self, class_id, limit=200):
+        """Type-reference neighbours of one class, both directions, for the inspector."""
+        if class_id not in self.nodes:
+            raise ValueError("Classe desconhecida.")
+        out = [
+            {"id": t, "line": line} for t, kind, _, line, _ in self.flow.adjacency.get(class_id, ()) if kind == "uses"
+        ]
+        incoming = [
+            {"id": s, "line": e[3]}
+            for s, edges in self.flow.adjacency.items()
+            for e in edges
+            if e[1] == "uses" and e[0] == class_id
+        ]
+        return {
+            "id": class_id,
+            "out": out[:limit],
+            "in": sorted(incoming, key=lambda i: i["id"])[:limit],
+            "truncated": len(out) > limit or len(incoming) > limit,
         }
 
     def _intent_edges(self, manifest):

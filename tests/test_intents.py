@@ -61,6 +61,16 @@ class IntentEdgeTests(unittest.TestCase):
             {("A", "launches", "B", "startActivity", "high"), ("A", "launches", "C", "startActivityForResult", "high")},
         )
 
+    def test_jadx_cast_on_class_literal(self):
+        # Regression: JADX output is `new Intent(this, (Class<?>) B.class)`.
+        p = self.project(
+            "void m() { Intent i = new Intent(this, (Class<?>) B.class); startActivity(i); i.setClass(this, (Class<?>) C.class); startService(i); }"
+        )
+        self.assertEqual(
+            self.edges(p),
+            {("A", "launches", "B", "startActivity", "high"), ("A", "launches", "C", "startService", "high")},
+        )
+
     def test_set_class_name_and_component(self):
         p = self.project(
             'void m() { Intent i = new Intent(); i.setClassName("app", "app.B"); startActivity(i);'

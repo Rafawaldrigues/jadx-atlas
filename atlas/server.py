@@ -115,6 +115,22 @@ class Handler(SimpleHTTPRequestHandler):
                     raise ValueError("Importe um projeto primeiro.")
                 class_id = parse_qs(url.query).get("id", [""])[0]
                 return self.json(self.state.project.source(class_id))
+            if url.path in {"/api/paths", "/api/uses"}:
+                if not self.state.project:
+                    raise ValueError("Importe um projeto primeiro.")
+                query = parse_qs(url.query)
+                if url.path == "/api/uses":
+                    return self.json(self.state.project.uses(query.get("id", [""])[0]))
+                try:
+                    depth = int(query.get("maxDepth", ["6"])[0])
+                except ValueError:
+                    raise ValueError("maxDepth deve ser um número.") from None
+                target = query.get("target", [""])[0] or None
+                return self.json(
+                    self.state.project.paths(
+                        query.get("entry", [""])[0], target, depth, query.get("inheritance", ["1"])[0] != "0"
+                    )
+                )
             if url.path.startswith("/api/"):
                 return self.json({"error": "Rota não encontrada."}, 404)
             # Static assets only; never expose source files, directories or secrets.
