@@ -1,9 +1,9 @@
 {
   "name": "jadx-atlas",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Explorador local de herança e interfaces em código Java exportado pelo JADX",
+  "description": "Front-end libraries for JADX Atlas (vendored into atlas/web/vendor)",
   "scripts": {
     "vendor": "node scripts/vendor.mjs",
     "check": "node --check atlas/web/app.js && node --check atlas/web/logic.js && node --test 'tests/web/*.test.js'"

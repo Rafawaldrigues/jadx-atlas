@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "jadx-atlas"
 dynamic = ["version"]
-description = "Local map of Java class hierarchies (and, soon, Android attack surface) from JADX output"
+description = "Attack-surface map for Android apps, built on JADX output"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE", "atlas/web/vendor/*-LICENSE"]
@@ -16,7 +16,7 @@ dependencies = [
     "tree-sitter-java>=0.23.5,<0.24",
     "defusedxml>=0.7.1,<0.8",
 ]
-keywords = ["android", "jadx", "reverse-engineering", "static-analysis", "mobile-security"]
+keywords = ["android", "jadx", "reverse-engineering", "static-analysis", "mobile-security", "appsec", "apk"]
 classifiers = [
     "Environment :: Web Environment",
     "Intended Audience :: Developers",
@@ -34,7 +34,9 @@ dev = ["ruff==0.16.10"]
 jadx-atlas = "atlas.__main__:main"
 
 [project.urls]
-Repository = "https://github.com/Rafawaldrigues/JADX-maping"
+Repository = "https://github.com/Rafawaldrigues/jadx-atlas"
+Issues = "https://github.com/Rafawaldrigues/jadx-atlas/issues"
+Changelog = "https://github.com/Rafawaldrigues/jadx-atlas/blob/main/CHANGELOG.md"
 
 [tool.setuptools.dynamic]
 version = { attr = "atlas.__version__" }

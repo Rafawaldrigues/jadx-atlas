@@ -112,4 +112,4 @@ jobs:
       - run: python -m build
       - name: Wheel ships the UI, demo and rule data
         run: |
-          python -m zipfile -l dist/*.whl | grep -E "atlas/web/index.html|atlas/examples/pedidos/AndroidManifest.xml|atlas/data/rules/tls.json|atlas/data/framework_hierarchy.json"
+          python -m zipfile -l dist/*.whl | grep -E "atlas/web/index.html|atlas/examples/orders/AndroidManifest.xml|atlas/data/rules/tls.json|atlas/data/framework_hierarchy.json"
