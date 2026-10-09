@@ -12,6 +12,7 @@ enclosing classes). This is not type inference: unknown stays unknown.
 
 from __future__ import annotations
 
+import bisect
 import re
 
 from tree_sitter import Query, QueryCursor
@@ -30,15 +31,34 @@ MAX_TEXT = 120
 
 _QUERIES = {}
 
+# Phase 5 "uses": object creation, static calls and the declared type of locals/fields.
+# Parameters, return types and casts are left out on purpose (volume; see docs/DECISIONS.md D-020).
+TYPE_REFERENCE_QUERY = """
+(object_creation_expression type: (_) @type)
+(local_variable_declaration type: (_) @type)
+(field_declaration type: (_) @type)
+(method_invocation object: (identifier) @static)
+(method_invocation object: (field_access) @static)
+"""
 
-def _query(language):
-    if language not in _QUERIES:
-        _QUERIES[language] = Query(
+
+def _query(language, index):
+    """One query (one tree traversal) for rule facts, Intent calls and type references.
+
+    `#any-of?` lets tree-sitter drop irrelevant method names before Python sees them.
+    """
+    key = (language, id(index))
+    if key not in _QUERIES:
+        calls = sorted(index.call_methods | set(INTENT_SINKS) | {"registerReceiver"} | INTENT_READS)
+        overrides = sorted(index.override_methods) or ["__none__"]
+        quoted = lambda names: " ".join(f'"{name}"' for name in names)  # noqa: E731
+        _QUERIES[key] = Query(
             language,
-            "(method_invocation name: (identifier) @call) (object_creation_expression) @new "
-            "(method_declaration name: (identifier) @override) (string_literal) @string",
+            f"((method_invocation name: (identifier) @call) (#any-of? @call {quoted(calls)})) "
+            f"((method_declaration name: (identifier) @override) (#any-of? @override {quoted(overrides)})) "
+            "(object_creation_expression) @new (string_literal) @string " + TYPE_REFERENCE_QUERY,
         )
-    return _QUERIES[language]
+    return _QUERIES[key]
 
 
 def text(node, limit=MAX_TEXT):
@@ -164,17 +184,18 @@ class FileFacts:
 
     def __init__(self, data, declarations):
         self.data = data
-        # Innermost declaration wins: sort by start, scan the (few) declarations of the file.
+        # Innermost declaration wins: sorted by start, the innermost container is the closest one before `offset`.
         self.declarations = sorted(declarations, key=lambda d: (d["_start"], -d["_end"]))
+        self.starts = [d["_start"] for d in self.declarations]
 
     def owner(self, offset):
-        found = None
-        for declaration in self.declarations:
-            if declaration["_start"] <= offset < declaration["_end"]:
-                found = declaration
-            elif declaration["_start"] > offset:
-                break
-        return found
+        index = bisect.bisect_right(self.starts, offset) - 1
+        while index >= 0:
+            declaration = self.declarations[index]
+            if offset < declaration["_end"]:
+                return declaration
+            index -= 1
+        return None
 
 
 def _anonymous_context(node, owner_start):
@@ -278,6 +299,24 @@ def _constants(body):
             argument = _argument(value, {})
             if argument["kind"] in {"string", "int", "bool", "array-literal", "bytes-literal"}:
                 found[name] = argument
+    return found
+
+
+def _string_constants(body):
+    """`static final String X = "..."` of one class body; a cheaper subset of _constants()."""
+    found = {}
+    for child in body.named_children:
+        if child.type != "field_declaration":
+            continue
+        raw = child.text
+        if b"static" not in raw or b"final" not in raw or b'"' not in raw:
+            continue
+        for declarator in child.named_children:
+            if declarator.type == "variable_declarator":
+                value = declarator.child_by_field_name("value")
+                name = declarator.child_by_field_name("name")
+                if value is not None and name is not None and value.type == "string_literal":
+                    found[name.text.decode()] = string_value(value)
     return found
 
 
@@ -388,7 +427,7 @@ def collect(language, tree, data, declarations, index):
             event["anonymousType"] = anonymous_type
         owner["_facts"].append(event)
 
-    captures = QueryCursor(_query(language)).captures(tree.root_node)
+    captures = QueryCursor(_query(language, index)).captures(tree.root_node)
     flows = {}
 
     def flow_for(node):
@@ -400,8 +439,12 @@ def collect(language, tree, data, declarations, index):
             flows[key] = _MethodFlow(body)
         return flows[key]
 
+    # Compare raw bytes first: most method calls in a file are irrelevant and should cost one set lookup.
+    wanted = index.call_method_bytes | INTENT_METHOD_BYTES
     for name_node in captures.get("call", ()):
-        method = text(name_node)
+        if name_node.text not in wanted:
+            continue
+        method = name_node.text.decode()
         if method in INTENT_SINKS or method == "registerReceiver" or method in INTENT_READS:
             call = name_node.parent
             arguments = call.child_by_field_name("arguments")
@@ -486,9 +529,9 @@ def collect(language, tree, data, declarations, index):
         )
         emit(creation, {"kind": "new", "type": type_text, "args": args})
     for name_node in captures.get("override", ()):
-        method = text(name_node)
-        if method not in index.override_methods:
+        if name_node.text not in index.override_method_bytes:
             continue
+        method = name_node.text.decode()
         declaration = name_node.parent
         parameters = declaration.child_by_field_name("parameters")
         shape, calls = _body_shape(declaration)
@@ -504,15 +547,57 @@ def collect(language, tree, data, declarations, index):
                 else 0,
             },
         )
+    # Type references for "uses" edges: {type text: first line}, resolved per owner after indexing.
+    for declaration in declarations:
+        declaration["_uses"] = {}
+    references = {name: captures.get(name, ()) for name in ("type", "static")}
+    primitives = {
+        b"int",
+        b"long",
+        b"short",
+        b"byte",
+        b"char",
+        b"boolean",
+        b"float",
+        b"double",
+        b"void",
+        b"var",
+        b"String",
+        b"Object",
+    }
+    seen = {}
+    for capture, nodes in references.items():
+        for node in nodes:
+            raw = node.text
+            # Fast path: plain identifiers (the vast majority) need no tree walk; lowercase ones are variables.
+            if node.type in {"type_identifier", "identifier"}:
+                if not raw[:1].isupper() or raw in primitives:
+                    continue
+                name = raw
+            else:
+                if capture == "static" and not raw[:1].isupper() and b"." not in raw:
+                    continue
+                name = (raw_type_text(node) or "").replace("[]", "").encode()
+                if not name or name in primitives or not (name[:1].isupper() or b"." in name):
+                    continue
+            owner = facts.owner(node.start_byte)
+            if owner is None:
+                continue
+            key = (id(owner), name)
+            if key not in seen:
+                seen[key] = True
+                decoded = name.decode("utf-8", "replace")
+                if decoded != owner["name"]:
+                    owner["_uses"].setdefault(decoded, node.start_point.row + 1)
     # Project-wide string constants (for `Actions.GO` style references resolved after indexing).
     for declaration in declarations:
         node = tree.root_node.descendant_for_byte_range(declaration["_start"], declaration["_end"])
         body = node.child_by_field_name("body") if node is not None else None
-        declaration["_string_constants"] = (
-            {k: v["value"] for k, v in _constants(body).items() if v["kind"] == "string"} if body is not None else {}
-        )
+        declaration["_string_constants"] = _string_constants(body) if body is not None else {}
     if index.string_patterns:
         for literal in captures.get("string", ()):
+            if not index.string_prefilter_bytes.search(literal.text.strip(b'"')):
+                continue  # most literals: rejected on raw bytes, never decoded
             if _inside_annotation(literal):
                 continue  # e.g. Kotlin @Metadata(d1 = ...): compiler data, not app strings
             value = string_value(literal)
@@ -557,10 +642,17 @@ INTENT_SINKS = {
 PENDING_INTENT_SINKS = {"getActivity", "getService", "getBroadcast", "getForegroundService"}
 INTENT_MUTATORS = {"setClass", "setClassName", "setComponent", "setAction", "setPackage"}
 INTENT_READS = {"getIntent"}
+INTENT_METHOD_BYTES = {name.encode() for name in (*INTENT_SINKS, "registerReceiver", *INTENT_READS)}
 
 
 def _class_literal(node):
-    """`X.class` → "X" (type text) or None."""
+    """`X.class` → "X" (type text) or None. JADX writes `(Class<?>) X.class`, so casts are unwrapped."""
+    while node is not None and node.type in {"cast_expression", "parenthesized_expression"}:
+        node = (
+            node.child_by_field_name("value")
+            if node.type == "cast_expression"
+            else (node.named_children[0] if node.named_children else None)
+        )
     if node is not None and node.type == "class_literal":
         return raw_type_text(node.named_children[0]) if node.named_children else None
     return None

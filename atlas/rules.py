@@ -70,8 +70,12 @@ class RuleIndex:
         self.string_prefilter = (
             re.compile("|".join(f"(?:{p})" for p in prefilters)) if prefilters else re.compile(r"(?!)")
         )
+        # Same alternatives on raw bytes (patterns are ASCII), applied before decoding each literal.
+        self.string_prefilter_bytes = re.compile(self.string_prefilter.pattern.encode())
         self.identifier_pattern = code_facts.compile_identifier_pattern(self.identifiers) if self.identifiers else None
         self.secret_rules = [r for r in self.string_patterns if r["match"].get("mask")]
+        self.call_method_bytes = {name.encode() for name in self.call_methods}
+        self.override_method_bytes = {name.encode() for name in self.override_methods}
 
 
 @lru_cache(maxsize=1)
