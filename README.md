@@ -135,7 +135,7 @@ npm run check
 
 O teste de integração com o JADX roda quando `javac`, `jar` e `jadx` estão no `PATH`; caso contrário, é pulado. Para testes de escala, `python scripts/gen_large_project.py --classes 20000 --depth 8 --obfuscated 0.6` gera um projeto sintético em `artifacts/` (pasta ignorada pelo Git).
 
-O servidor usa a biblioteca padrão do Python e só escuta em `127.0.0.1`. Os arquivos do projeto são lidos pelo processo local; não há analytics, CDN ou serviço remoto. Origem e Host são validados nas rotas. Todas as abas abertas compartilham o mesmo projeto em memória. O índice não persiste entre reinicializações; inicie novamente passando a pasta para reabrir o projeto.
+O servidor usa a biblioteca padrão do Python e só escuta em `127.0.0.1`. Cada execução gera um **token de sessão**: abra o endereço exibido no terminal (com `#token=…`), porque as rotas `/api/` recusam requisições sem ele. `--verbose` registra cada requisição como JSON (rota, status e tempo, sem query nem conteúdo de código). Os arquivos do projeto são lidos pelo processo local; não há analytics, CDN ou serviço remoto. Origem e Host são validados nas rotas. Todas as abas abertas compartilham o mesmo projeto em memória. O índice não persiste entre reinicializações; inicie novamente passando a pasta para reabrir o projeto.
 
 As dependências do navegador são distribuídas junto com suas licenças. Para atualizá-las/regerá-las, instale Node.js e execute:
 

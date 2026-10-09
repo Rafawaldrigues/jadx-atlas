@@ -179,3 +179,23 @@ Fonte: `frameworks/base/core/java/com/android/internal/pm/pkg/component/` (branc
 - **Cache:** resultados de parse por arquivo, chaveados por (caminho relativo, `mtime_ns`, tamanho), com uma chave global feita da versão da ferramenta, do formato do cache e de todos os JSON de `atlas/data` (regras e tabelas). Mudar qualquer um invalida tudo. Fica em `~/.cache/jadx-atlas/index/<sha256 do caminho>.json.gz` (ou `ATLAS_CACHE_DIR`), é recusado dentro da pasta analisada e é gravado de forma atômica. Usa **JSON, não pickle**, porque um cache adulterado não pode virar execução de código. Um cache corrompido é ignorado e reescrito. Está ligado por padrão no `serve` (exceto na demonstração) e desliga com `--no-cache`.
 - **Rotas por demanda:** `/api/summary`, `/api/list?page=&size=&kind=&role=&severity=&q=` (ordenada por id, estável), `/api/neighbors?id=&depth=&layers=inheritance,intents,uses` (até 3 níveis e 300 nós) e a já existente `/api/search`. `/api/project` recusa payloads acima de `ATLAS_MAX_PAYLOAD_MB` (padrão 150) com `tooLarge` e um resumo.
 - **Não feito:** a interface ainda não trabalha só com a vizinhança. Ela carrega o payload inteiro abaixo do limite. As rotas existem para esse modo futuro e para ferramentas externas.
+
+## D-027 · Token de sessão (Fase 10)
+
+- `jadx-atlas serve` gera `secrets.token_urlsafe(24)` a cada execução e abre `http://127.0.0.1:<porta>/#token=…`. O token fica no **fragmento**, que o navegador nunca envia em requisições, cabeçalho Referer ou log do servidor. A interface guarda o token em `sessionStorage` (só aquela aba), apaga o fragmento da barra de endereço com `history.replaceState` e o envia em `X-Atlas-Token` em toda chamada a `/api/`.
+- A comparação usa `hmac.compare_digest`. Arquivos estáticos (o código da interface, que é público) não exigem token. As validações de `Host` e `Origin` continuam valendo.
+- Um `Handler` criado sem token (testes antigos, uso embutido) mantém o comportamento anterior, por compatibilidade.
+
+## D-028 · Front-end: módulos, CSP e acessibilidade (Fase 10)
+
+- A lógica pura (`selectGraph`, ancestrais, raiz, filtros, bibliotecas, agrupamento) foi para `atlas/web/logic.js`, um módulo ES, testado com `node --test tests/web/*.test.js` (11 testes). `app.js` virou módulo, o que a CSP `script-src 'self'` já permitia.
+- **CSP sem `'unsafe-inline'`:** o único estilo inline vinha do Cytoscape, que injeta `<style>` com `position: relative` no contêiner, a menos que exista um elemento com id `__________cytoscape_stylesheet`. Fornecemos essa regra em `cytoscape.css` com esse id. Conferido no navegador: nenhuma violação.
+- **XSS:** `tests/test_frontend_safety.py` falha se aparecer `innerHTML`/`outerHTML`/`insertAdjacentHTML`/`document.write`/`eval`, um handler inline ou um `<script>`/`style=` inline. Conferido no navegador com nomes de componente, hosts de deep link e strings contendo `<img onerror>`, `<svg onload>` e `<script>`: nada foi interpretado.
+- **Acessibilidade:** o foco volta ao elemento que abriu o diálogo; o progresso tem `aria-live`; as abas do inspetor seguem o padrão WAI-ARIA (setas, Home, End); a exposição usa borda dupla e marcador de texto, a severidade usa letra e as arestas de Intent usam traço e formato de seta, nunca só cor.
+- **Não feito (registrado):** i18n (`pt-BR.json`/`en.json` com seletor). A interface tem centenas de textos espalhados por `index.html` e `app.js`. Uma tradução parcial deixaria a tela metade em cada idioma, então ficou para uma passada única e dedicada. Também não foi feito o teste de fumaça com Playwright; a verificação foi manual no navegador.
+
+## D-029 · Empacotamento e CI (Fase 10)
+
+- A versão fica num só lugar (`atlas/__init__.py`, lida pelo `pyproject.toml`). `CHANGELOG.md` segue o Keep a Changelog. O CI constrói sdist e wheel com `python -m build` e confere que a wheel leva UI, demonstração e dados de regras. A distribuição no PyPI está preparada, mas **não publicada**.
+- **Matriz:** Linux com Python 3.10 a 3.14, mais Windows e macOS com 3.14. `.gitattributes` força LF, para o golden file e as fixtures não quebrarem no Windows. Testes que criam links simbólicos são pulados onde o sistema não permite.
+- `pip-audit` (bloqueante) e Dependabot (pip, npm e GitHub Actions).
