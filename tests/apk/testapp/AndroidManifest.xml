@@ -38,7 +38,7 @@
 
         <activity android:name=".InternalActivity" android:exported="false" />
 
-        <!-- Phase 5 planted chain: DeepLinkActivity -> PaymentActivity (internal) -> InsecureClient (accept-all TrustManager). -->
+        <!-- Planted chain: DeepLinkActivity -> PaymentActivity (internal) -> InsecureClient (accept-all TrustManager). -->
         <activity android:name=".PaymentActivity" android:exported="false" />
 
         <!-- exported comes from a resource: the tool must say "unknown" and give a guess. -->

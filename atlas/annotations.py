@@ -1,4 +1,4 @@
-"""Analyst annotations (alias, tags, note) stored outside the analysed folder (phase 8).
+"""Analyst annotations (alias, tags, note) stored outside the analysed folder.
 
 One JSON file per analysed root, keyed by a hash of its resolved path, in the user's
 data directory. The exported JADX folder is never written to.

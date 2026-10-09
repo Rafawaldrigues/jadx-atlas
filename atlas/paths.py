@@ -1,4 +1,4 @@
-"""Possible paths from an entry point to a sensitive class (phase 5).
+"""Possible paths from an entry point to a sensitive class.
 
 The graph is an over-approximation built from resolved facts (Intent edges,
 type references and, optionally, inheritance). A path is "possible", never a

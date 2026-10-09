@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Benchmark indexing and routes on synthetic projects (phase 9). Prints JSON lines.
+"""Benchmark indexing and routes on synthetic projects. Prints JSON lines.
 
 Each size runs in a fresh subprocess so peak memory (ru_maxrss) is per measurement.
 
@@ -34,7 +34,7 @@ def measure(path, workers=None, cache=False):
     from atlas.indexer import Project
     from atlas.server import Handler, State
 
-    supported = inspect.signature(Project).parameters  # the baseline (before phase 9) has neither option
+    supported = inspect.signature(Project).parameters  # older versions have neither option
     options = {k: v for k, v in {"workers": workers, "cache": cache}.items() if k in supported}
     started = time.perf_counter()
     project = Project(path, **options)

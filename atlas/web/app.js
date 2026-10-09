@@ -69,7 +69,7 @@ function primaryRole(node) { return node.roles?.[0]; }
 
 function matchesRole(node) { return logic.matchesRole(node, state.role); }
 
-// Phase 8: library hiding (never the app package) and analyst aliases.
+// Library hiding (never the app package) and analyst aliases.
 function appPackage() { return state.project?.manifest?.package || ''; }
 
 function isHiddenLibrary(node) { return logic.isHiddenLibrary(node, { hide: state.hideLibraries, prefixes: state.extraPrefixes, app: appPackage() }); }
@@ -89,7 +89,7 @@ async function loadProject() {
   const project = await api('/api/project');
   if (!project) return;
   if (project.tooLarge) {
-    // Phase 9 guard: the browser would freeze on this payload; the on-demand routes and the CLI still work.
+    // Size guard: the browser would freeze on this payload; the on-demand routes and the CLI still work.
     $('#project-name').textContent = project.summary.name;
     $('#surface-banner').hidden = false;
     $('#surface-banner').textContent = `${project.message} (${Math.round(project.payloadBytes / 1048576)} MB; adjust the limit with ATLAS_MAX_PAYLOAD_MB).`;
@@ -483,7 +483,7 @@ function setPanel(panel) {
   if (panel === 'findings') renderFindings();
 }
 
-// Paths (phase 5): computed on demand by the server; drawn as a temporary view on the map.
+// Paths: computed on demand by the server; drawn as a temporary view on the map.
 function renderPathsChrome() {
   const entries = state.project.pathEntries || [];
   $('#tab-paths').hidden = !entries.length;
@@ -547,7 +547,7 @@ function showPath(entry, path) {
   $('#graph-status').textContent = 'Possible path highlighted · use ↺ to go back to the map';
 }
 
-// Findings (phase 3): candidates for manual review, never verdicts.
+// Findings: candidates for manual review, never verdicts.
 const SEVERITY_RANK = { info: 0, low: 1, medium: 2, high: 3 };
 const CONFIDENCE_RANK = { low: 1, medium: 2, high: 3 };
 
@@ -935,7 +935,7 @@ async function pollImport() {
   } catch (error) { importError(error.message); }
 }
 
-// Version diff (phase 6). Renamed obfuscated classes are only "possible matches".
+// Version diff. Renamed obfuscated classes are only "possible matches".
 const DIFF_LABELS = {
   app: 'App', 'app-flag': '<application> attribute', 'permission-added': 'New permission', 'permission-removed': 'Removed permission',
   'component-added': 'New component', 'component-removed': 'Removed component', 'exported-changed': 'Export changed',

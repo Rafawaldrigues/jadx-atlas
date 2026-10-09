@@ -1,4 +1,4 @@
-"""Parallel parsing and an on-disk cache of per-file parse results (phase 9).
+"""Parallel parsing and an on-disk cache of per-file parse results.
 
 Workers re-create their own tree-sitter parser (parsers are not picklable).
 Results come back in submission order, so the index is identical to a serial

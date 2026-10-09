@@ -32,7 +32,7 @@ MAX_SEARCH_STRINGS = 60
 
 _QUERIES = {}
 
-# Phase 5 "uses": object creation, static calls and the declared type of locals/fields.
+# "uses" edges: object creation, static calls and the declared type of locals/fields.
 # Parameters, return types and casts are left out on purpose (volume; see docs/DESIGN.md, "Intents and paths").
 TYPE_REFERENCE_QUERY = """
 (object_creation_expression type: (_) @type)
@@ -597,7 +597,7 @@ def collect(language, tree, data, declarations, index):
         node = tree.root_node.descendant_for_byte_range(declaration["_start"], declaration["_end"])
         body = node.child_by_field_name("body") if node is not None else None
         declaration["_string_constants"] = _string_constants(body) if body is not None else {}
-    # Search index (phase 8): a bounded sample of each class's string literals, raw text, no escapes decoded.
+    # Search index: a bounded sample of each class's string literals, raw text, no escapes decoded.
     for declaration in declarations:
         declaration["_strings"] = []
     for literal in captures.get("string", ()):
@@ -635,7 +635,7 @@ def compile_identifier_pattern(names):
     return re.compile(rb"\b(?:" + b"|".join(re.escape(n.encode()) for n in sorted(names)) + rb")\b")
 
 
-# --- Intents (phase 4): simple intra-method flow, no interprocedural analysis -------------------
+# --- Intents: simple intra-method flow, no interprocedural analysis -------------------
 INTENT_SINKS = {
     "startActivity": 0,
     "startActivityForResult": 0,

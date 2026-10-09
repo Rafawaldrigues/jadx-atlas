@@ -721,7 +721,7 @@ class Project:
         }
 
     def _intent_edges(self, manifest):
-        """launches / sends_action / registers_receiver edges from intra-method Intent flow (phase 4)."""
+        """launches / sends_action / registers_receiver edges from intra-method Intent flow."""
         symbols = {key for key, node in self.nodes.items() if not node["external"]}
         constants = {key: self.nodes[key].get("_string_constants", {}) for key in symbols}
         package = manifest["package"] if manifest else ""
