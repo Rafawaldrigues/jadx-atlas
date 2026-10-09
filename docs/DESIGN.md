@@ -4,14 +4,14 @@ Why JADX Atlas works the way it does. Code comments point to the sections below.
 
 ## Principles
 
-- **Honest resolution.** Classes are never joined by short name. Every inferred fact (relation, role,
+- Honest resolution. Classes are never joined by short name. Every inferred fact (relation, role,
   finding, edge, path) carries a resolution status or a confidence (`high`, `medium`, `low`) and evidence
   (file, line, snippet). Unknown stays unknown.
-- **Candidates, not verdicts.** Findings and paths are leads for manual review. Each rule documents its
+- Candidates, not verdicts. Findings and paths are leads for manual review. Each rule documents its
   known false positives.
-- **Local only.** No network calls at run time, no telemetry, no CDN. The server binds to `127.0.0.1`.
-- **Hostile input.** Decompiled code, the manifest and APK strings are untrusted (see *Security of the tool*).
-- **Minimal dependencies.** Runtime: `tree-sitter`, `tree-sitter-java`, `defusedxml`. Front-end libraries
+- Local only. No network calls at run time, no telemetry, no CDN. The server binds to `127.0.0.1`.
+- Hostile input. Decompiled code, the manifest and APK strings are untrusted (see *Security of the tool*).
+- Minimal dependencies. Runtime: `tree-sitter`, `tree-sitter-java`, `defusedxml`. Front-end libraries
   (Cytoscape.js, dagre) are vendored with their MIT licences.
 
 ## Indexing and name resolution
@@ -39,7 +39,7 @@ Rules follow the AOSP component parsers (`frameworks/base/core/java/com/android/
   does **not**; a provider uses `readPermission`/`writePermission`, then `permission`, then the
   application's. Exposure is judged by the weakest side (a provider readable or writable without a
   permission is exposed).
-- **Unknown values carry a guess.** `exported="@bool/x"` is reported as `unknown`; the guess comes from
+- Unknown values carry a guess. `exported="@bool/x"` is reported as `unknown`; the guess comes from
   `res/values*/bools.xml` (several configurations → the more exposed value) or from the implicit rule,
   always with its reason and `low` confidence. These count as "potentially exported", never as confirmed.
 - Parsing uses `defusedxml` SAX (DTDs, entities and external references forbidden; size, depth and element

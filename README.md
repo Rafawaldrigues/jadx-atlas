@@ -4,16 +4,14 @@
 ![Python 3.10–3.14](https://img.shields.io/badge/python-3.10%E2%80%933.14-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**Attack-surface map for Android apps, built on JADX output.** Point it at a JADX export and it shows
-which components are exposed, what each class really is (Activity, TrustManager, WebViewClient… even when
-the name is `a.b.c`), where sensitive APIs are used, how screens launch each other, and possible paths
-from an exposed entry point to the risky code. Everything runs locally, and every result comes with its
-confidence and the file and line that justify it.
+Attack-surface map for Android apps, built on JADX output.
 
-For security researchers, pentesters and bug bounty hunters who already use JADX and want to get from
-"decompiled" to "where do I look first" faster.
+Given a JADX export, JADX Atlas shows which components are exposed, what each class is (Activity,
+TrustManager, WebViewClient and so on, even when the name is `a.b.c`), where sensitive APIs are used,
+how screens launch each other, and possible paths from an exposed entry point to the code worth reviewing.
+It runs locally, and each result includes its confidence and the file and line it is based on.
 
-> **Responsible use:** only analyse apps you are authorised to analyse. See [SECURITY.md](SECURITY.md).
+It is meant for people who already read apps in JADX and want a faster way to decide where to look first.
 
 ## Quick start
 
@@ -36,9 +34,9 @@ jadx-atlas app-out
 `./start.sh` does the install steps for you. The address printed in the terminal includes a per-run
 session token; open that exact address.
 
-## Why not MobSF, Drozer or a JADX plugin?
+## Compared with other tools
 
-They are good tools and Atlas does not replace them:
+Atlas complements these tools rather than replacing them:
 
 | Tool | What it does best | What Atlas adds |
 |---|---|---|
@@ -77,10 +75,10 @@ Design details are in [docs/DESIGN.md](docs/DESIGN.md); the checks against indep
 Reads `resources/AndroidManifest.xml` (or `--manifest <file>`) as hostile input and links every component
 to its class:
 
-- **Effective export with its reason**, following the AOSP rules: explicit, implicit through an
+- Effective export and the reason for it, following the AOSP rules: explicit, implicit through an
   intent-filter (targetSdk < 31), old provider default (targetSdk < 17), and so on.
-- **Values that cannot be known for sure** (`exported="@bool/…"`, inconsistent manifests) are reported as
-  *unknown* with a **guess** and where it came from, shown as "potentially exported".
+- Values that cannot be known statically (`exported="@bool/…"`, inconsistent manifests) are reported as
+  *unknown*, together with a guess and where it came from, and shown as "potentially exported".
 - Permissions (including the one inherited from `<application>`), `protectionLevel` of the app's own
   permissions, providers judged by their weakest side, and deep links.
 - App alerts: `debuggable`, `allowBackup`, `usesCleartextTraffic`, `testOnly`.
@@ -96,7 +94,7 @@ components are cross-checked against it.
 
 ### Finding candidates
 
-30 data-driven rules (`atlas/data/rules/*.json`) flag code that **often** indicates a problem:
+30 data-driven rules (`atlas/data/rules/*.json`) flag code that often indicates a problem:
 
 - **WebView:** JavaScript, native bridges, file access, debugging, dynamic `loadUrl`.
 - **TLS:** empty TrustManager, HostnameVerifier that accepts everything, `onReceivedSslError` calling `proceed()`, legacy protocols.
@@ -105,11 +103,12 @@ components are cross-checked against it.
 - **Storage and IPC:** `MODE_WORLD_*`, concatenated SQL, mutable `PendingIntent`, broadcasts without a permission, Intent data read in exported components.
 - **Secrets:** known formats, high-entropy literals, `http://` URLs.
 
-Each rule documents known false positives and official references. Confidence does not rely on a type system:
+Each rule documents its known false positives and official references. There is no type inference, so
+confidence is graded:
 
-- **high:** the receiver's declared type resolves, through the file's imports, to the API class and the method matches;
-- **medium:** the method matches and the file imports the API, but the receiver type could not be determined;
-- **low:** only the method name matches, or an argument could not be evaluated.
+- `high`: the receiver's declared type resolves, through the file's imports, to the API class and the method matches;
+- `medium`: the method matches and the file imports the API, but the receiver type could not be determined;
+- `low`: only the method name matches, or an argument could not be evaluated.
 
 Receivers of another type are discarded. Code in anonymous classes is attributed to the enclosing class.
 Secrets are always masked (`AKIA…[20 chars]`).
@@ -119,12 +118,12 @@ Secrets are always masked (`AKIA…[20 chars]`).
 Screens and components are linked through `startActivity`, `startService`, `bindService`,
 `sendBroadcast`, `PendingIntent.get*` and `registerReceiver`, with targets from `X.class`,
 `setClassName`, `setComponent` or implicit actions matched against the manifest's intent filters.
-Untraceable Intents are listed as unresolved with a reason; no edge is ever invented.
+Intents that cannot be traced are listed as unresolved, with the reason, instead of becoming edges.
 
-The **Paths** tab finds routes from an exposed entry (exported component, deep link, Application) to
+The Paths tab finds routes from an exposed entry (exported component, deep link, Application) to
 classes with finding candidates, through Intent edges, type references and, optionally, inheritance:
 shortest first, with depth, count and time limits, deterministic order and file:line evidence for every
-step. A path is **possible**, not proof of reachability or exploitability.
+step. A path is a possible route, not proof of reachability or exploitability.
 
 ### Version diff
 
@@ -160,15 +159,15 @@ folder's absolute path is never exported.
 ### Obfuscated code
 
 - The status bar estimates obfuscation. With `jadx --deobf`, the `renamed from` and `compiled from` comments become searchable aliases.
-- **Global search** (3+ characters) also looks in roles, rules and string literals, including URLs.
-- **Hide libraries** hides known library prefixes and the ones you add, but never the app's own package.
-- **Group packages** collapses the map to one node per package.
+- Global search (3 or more characters) also looks in roles, rules and string literals, including URLs.
+- Hide libraries hides known library prefixes and the ones you add, but never the app's own package.
+- Group packages collapses the map to one node per package.
 - Your aliases, tags and notes are stored in your user data directory (for example `~/.local/share/jadx-atlas`), never inside the analysed folder.
 
 ### Navigating the map
 
-- **Overview** shows the project; **Class focus** shows 1 to 5 levels around the selected class, and
-  **Full hierarchy** removes the limit. The **Inheritance / Intents / All** layers choose the edges.
+- Overview shows the whole project; Class focus shows 1 to 5 levels around the selected class, and
+  Full hierarchy removes the limit. The Inheritance / Intents / All buttons choose which edges are drawn.
 - Click a class to inspect it: declaration, roles, component data, finding candidates, Intents, type
   references and your notes. Click the file name to read the code with the line highlighted.
 - Keyboard: `/` search, `+`/`-` zoom, `0` fit, arrows move, `C` centre the selection, `H` full
@@ -192,13 +191,13 @@ the browser; the CLI and the on-demand API (`/api/list`, `/api/neighbors`, `/api
 
 ## Limitations
 
-- **No data-flow or interprocedural analysis.** Intent tracking is intra-method; paths are possible
+- No data-flow or interprocedural analysis. Intent tracking is intra-method; paths are possible
   routes, not proof.
-- **Findings are candidates.** Confidence levels describe how much of the match was confirmed, not
-  whether the issue is exploitable.
+- Findings are candidates for manual review. Confidence levels describe how much of the match was
+  confirmed, not whether the issue is exploitable.
 - Not analysed: native code, original Kotlin, Smali, resources other than the manifest, split APKs (only
   the base manifest) and run-time behaviour. Reflection and dynamic code loading hide real flows.
-- Inherited member types and some complex import/scope cases may stay unresolved; they are marked, never guessed.
+- Inherited member types and some complex import/scope cases may stay unresolved; they are marked as such.
 - The UI does not yet have a neighbourhood-only mode for projects above the payload limit.
 
 ## Command-line reference
@@ -241,12 +240,19 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and the [CHANGELOG](CHANGELOG.md).
 - Validate on more real apps (open-source and CTF apps whose licences allow it).
 - SARIF output, a neighbourhood-only UI mode for very large apps, UI translations.
 
-## Credits and licences
+## Author and licence
 
-JADX Atlas is released under the [MIT License](LICENSE). It builds on [JADX](https://github.com/skylot/jadx)
+Written by Rafael Guerra Waldrigues de Campos Bueno and released under the [MIT License](LICENSE).
+
+JADX Atlas builds on [JADX](https://github.com/skylot/jadx)
 output (it does not bundle JADX), [Tree-sitter](https://tree-sitter.github.io/) and
 [tree-sitter-java](https://github.com/tree-sitter/tree-sitter-java), [defusedxml](https://github.com/tiran/defusedxml),
 [Cytoscape.js](https://js.cytoscape.org/), [dagre](https://github.com/dagrejs/dagre) and
 [cytoscape-dagre](https://github.com/cytoscape/cytoscape.js-dagre). The vendored front-end libraries keep
 their MIT licences in `atlas/web/vendor/`. This project is not affiliated with JADX or any of the tools
 mentioned above.
+
+## Disclaimer
+
+The developer of this software is not responsible for any unauthorised use of it or for any damage it
+may cause.

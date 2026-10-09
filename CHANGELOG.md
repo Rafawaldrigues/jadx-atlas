@@ -5,19 +5,12 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-- Plain desktop look for the UI (Swing Metal palette, square corners, no shadows or animations, titled
-  borders); the graph uses white boxes with black outlines and hollow inheritance arrows.
-- Cytoscape.js 3.34.3 and cytoscape-dagre 4.0.1, which bundles dagre (the standalone `dagre.min.js` is gone).
-- `tree-sitter` stays below 0.26: 0.26.0 crashes in the query engine on real JADX output.
-
 ## [0.2.0] - 2026-10-09
 
-First public release: from a class-hierarchy viewer to an attack-surface map for Android apps.
+First public release: the class-hierarchy viewer becomes an attack-surface map for Android apps.
 
 ### Added
-- Installable package (`pyproject.toml`) with the `jadx-atlas` command (`serve`, `diff`, `export`), CI,
-  ruff, MIT licence and security policy.
+- Installable package (`pyproject.toml`) with the `jadx-atlas` command (`serve`, `diff`, `export`).
 - AndroidManifest attack surface: effective export with its reason (AOSP rules), unknown values with an
   explained guess, permissions, providers and deep links; Surface panel and app alerts.
 - Roles from inheritance (Activity, Service, TrustManager, WebViewClient...) with path and confidence,
@@ -32,12 +25,14 @@ First public release: from a class-hierarchy viewer to an attack-surface map for
 - Obfuscated code support: JADX aliases, obfuscation estimate, global search, hideable libraries,
   package grouping, analyst notes stored outside the analysed folder.
 - Parallel indexing, JSON disk cache and on-demand routes (`/api/summary`, `/api/list`, `/api/neighbors`).
-- Per-run session token on `/api/`, `--verbose` structured logs, CSP without `unsafe-inline`, front-end
-  logic in an ES module tested with `node --test`.
+- Per-run session token on `/api/`, `--verbose` structured logs and a CSP without `unsafe-inline`.
+- CI on Linux, Windows and macOS, ruff, front-end tests with `node --test`, MIT licence and security policy.
 
 ### Changed
-- Everything is in English: UI, messages, rules, reports, demo app and documentation.
-- Single readable stylesheet; the launcher is now `start.sh`.
+- Plain desktop-style UI (grey panels, square corners, titled borders); the map draws white boxes with
+  black outlines and hollow inheritance arrows.
+- Cytoscape.js 3.34.3 and cytoscape-dagre 4.0.1, which bundles dagre.
+- `tree-sitter` is kept below 0.26: 0.26.0 crashes in the query engine on real JADX output.
 
 ### Fixed
 - The map no longer breaks on unknown edge kinds.
