@@ -55,7 +55,7 @@ def run(command):
     return result.stdout
 
 
-def build(out: Path, sdk=None):
+def build(out: Path, sdk=None, obfuscate=False):
     found = find_sdk(sdk)
     if not found:
         raise RuntimeError("Android SDK não encontrado (defina ANDROID_HOME ou use --sdk)")
@@ -63,7 +63,7 @@ def build(out: Path, sdk=None):
     if not shutil.which("javac"):
         raise RuntimeError("javac não encontrado no PATH")
     out.mkdir(parents=True, exist_ok=True)
-    apk = out / "atlas-testapp.apk"
+    apk = out / ("atlas-testapp-r8.apk" if obfuscate else "atlas-testapp.apk")
     with tempfile.TemporaryDirectory() as directory:
         work = Path(directory)
         run([tools / "aapt2", "compile", "--dir", APP / "res", "-o", work / "res.zip"])
@@ -82,18 +82,31 @@ def build(out: Path, sdk=None):
         )
         sources = sorted((APP / "java").rglob("*.java"))
         run(["javac", "--release", "11", "-cp", android_jar, "-d", work / "classes", *sources])
-        run(
-            [
-                tools / "d8",
-                "--lib",
-                android_jar,
-                "--min-api",
-                "21",
-                "--output",
-                work,
-                *sorted((work / "classes").rglob("*.class")),
-            ]
-        )
+        classes = sorted((work / "classes").rglob("*.class"))
+        if obfuscate:
+            # R8 ships inside d8.jar: keep manifest components, rename the rest (tests/apk/testapp/proguard-rules.pro).
+            run(
+                [
+                    "java",
+                    "-cp",
+                    tools / "lib" / "d8.jar",
+                    "com.android.tools.r8.R8",
+                    "--release",
+                    "--lib",
+                    android_jar,
+                    "--min-api",
+                    "21",
+                    "--pg-conf",
+                    APP / "proguard-rules.pro",
+                    "--pg-map-output",
+                    out / "mapping.txt",
+                    "--output",
+                    work,
+                    *classes,
+                ]
+            )
+        else:
+            run([tools / "d8", "--lib", android_jar, "--min-api", "21", "--output", work, *classes])
         shutil.copyfile(work / "base.apk", apk)
         with zipfile.ZipFile(apk, "a") as archive:
             archive.write(work / "classes.dex", "classes.dex")
@@ -105,9 +118,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--sdk", help="Pasta do Android SDK")
     parser.add_argument("--out", type=Path, default=ROOT / "artifacts" / "testapp")
+    parser.add_argument(
+        "--obfuscate", action="store_true", help="Passar pelo R8 (renomeia classes fora dos componentes)"
+    )
     args = parser.parse_args(argv)
     try:
-        summary = build(args.out, args.sdk)
+        summary = build(args.out, args.sdk, args.obfuscate)
     except RuntimeError as error:
         parser.exit(1, f"{error}\n")
     for key, value in summary.items():
