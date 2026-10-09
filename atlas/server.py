@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from functools import partial
+import hmac
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
+import secrets
+import sys
 import threading
+import time
 from urllib.parse import parse_qs, urlparse
 import webbrowser
 
@@ -81,12 +85,28 @@ class State:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    def __init__(self, *args, state, **kwargs):
+    def __init__(self, *args, state, token=None, verbose=False, **kwargs):
         self.state = state
+        # Per-run secret required on /api/ (see docs/DECISIONS.md D-027). None keeps the old behaviour (tests, embedding).
+        self.token = token
+        self.verbose = verbose
+        self.started = time.perf_counter()
         super().__init__(*args, directory=str(BASE / "web"), **kwargs)
 
     def log_message(self, *args):
         pass
+
+    def log_request(self, code="-", size="-"):
+        # Structured, opt-in, and never the query string: class ids, paths and code stay out of logs.
+        if self.verbose:
+            entry = {
+                "time": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "method": self.command,
+                "route": urlparse(self.path).path,
+                "status": int(code) if str(code).isdigit() else str(code),
+                "ms": round((time.perf_counter() - self.started) * 1000, 1),
+            }
+            print(json.dumps(entry), file=sys.stderr, flush=True)
 
     def end_headers(self):
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -94,7 +114,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'",
         )
         super().end_headers()
 
@@ -116,6 +136,11 @@ class Handler(SimpleHTTPRequestHandler):
         if origin and origin not in {f"http://{host}" for host in allowed}:
             self.json({"error": "Origem não permitida."}, 403)
             return False
+        if self.token and urlparse(self.path).path.startswith("/api/"):
+            supplied = self.headers.get("X-Atlas-Token", "")
+            if not hmac.compare_digest(supplied.encode(), self.token.encode()):
+                self.json({"error": "Token de sessão ausente ou inválido. Abra o endereço exibido no terminal."}, 401)
+                return False
         if write and self.headers.get_content_type() != "application/json":
             self.json({"error": "Envie application/json."}, 415)
             return False
@@ -283,6 +308,9 @@ def add_arguments(parser):
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--manifest", help="AndroidManifest.xml decodificado (padrão: procurar perto da pasta)")
     parser.add_argument("--no-cache", action="store_true", help="Não usar o cache de indexação em disco")
+    parser.add_argument(
+        "--verbose", action="store_true", help="Registrar cada requisição (JSON por linha, sem conteúdo de código)"
+    )
     parser.add_argument("--workers", type=int, help="Processos de indexação (padrão: automático; 1 = serial)")
 
 
@@ -299,10 +327,14 @@ def serve(args, parser):
         parser.exit(1, f"{error}\n")
     state = State(project, cache=not args.no_cache, workers=args.workers)
     try:
-        server = ThreadingHTTPServer(("127.0.0.1", args.port), partial(Handler, state=state))
+        token = secrets.token_urlsafe(24)
+        server = ThreadingHTTPServer(
+            ("127.0.0.1", args.port), partial(Handler, state=state, token=token, verbose=args.verbose)
+        )
     except OSError as error:
         parser.exit(1, f"Não foi possível iniciar: {error}. Tente --port 8766.\n")
-    url = f"http://127.0.0.1:{server.server_port}"
+    # The token travels in the fragment: browsers never send it in requests, Referer headers or server logs.
+    url = f"http://127.0.0.1:{server.server_port}/#token={token}"
     print(f"JADX Atlas disponível em {url}\nCtrl+C para encerrar.", flush=True)
     if not args.no_browser:
         webbrowser.open(url)
