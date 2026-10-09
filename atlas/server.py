@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
+import os
 from pathlib import Path
 import threading
 from urllib.parse import parse_qs, urlparse
@@ -17,11 +18,13 @@ from .indexer import Cancelled, Project
 
 # Package directory: holds web/ (static UI) and examples/ (demo project).
 BASE = Path(__file__).resolve().parent
+MAX_PAYLOAD_BYTES = int(float(os.environ.get("ATLAS_MAX_PAYLOAD_MB", "150")) * 1024 * 1024)
 
 
 class State:
-    def __init__(self, initial=None):
+    def __init__(self, initial=None, cache=False, workers=None):
         self.lock = threading.Lock()
+        self.options = {"cache": cache, "workers": workers}
         self.project = initial
         # Second slot for "compare with another version" (phase 6): at most two projects in memory.
         self.compare = None
@@ -50,7 +53,7 @@ class State:
 
         def work():
             try:
-                project = Project(path, progress, self.cancel.is_set, demo=demo, manifest=manifest)
+                project = Project(path, progress, self.cancel.is_set, demo=demo, manifest=manifest, **self.options)
                 with self.lock:
                     if self.cancel.is_set():
                         raise Cancelled()
@@ -128,7 +131,43 @@ class Handler(SimpleHTTPRequestHandler):
                     status = dict(self.state.status)
                 return self.json(status)
             if url.path == "/api/project":
-                return self.json(self.state.project.payload if self.state.project else None)
+                project = self.state.project
+                if project is None:
+                    return self.json(None)
+                # Very large payloads would freeze the browser: refuse with a summary and point to the on-demand routes.
+                size = project.payload_bytes()
+                if size > MAX_PAYLOAD_BYTES:
+                    return self.json(
+                        {
+                            "tooLarge": True,
+                            "payloadBytes": size,
+                            "summary": project.summary(),
+                            "message": "Projeto grande demais para carregar inteiro no navegador. Use /api/list, /api/neighbors, /api/search ou jadx-atlas export.",
+                        }
+                    )
+                return self.json(project.payload)
+            if url.path in {"/api/summary", "/api/list", "/api/neighbors"}:
+                if not self.state.project:
+                    raise ValueError("Importe um projeto primeiro.")
+                query = {k: v[0] for k, v in parse_qs(url.query).items()}
+                try:
+                    if url.path == "/api/summary":
+                        return self.json(self.state.project.summary())
+                    if url.path == "/api/list":
+                        return self.json(
+                            self.state.project.list(
+                                query.get("page", 0),
+                                query.get("size", 200),
+                                query.get("kind", ""),
+                                query.get("role", ""),
+                                query.get("severity", ""),
+                                query.get("q", ""),
+                            )
+                        )
+                    layers = tuple(query.get("layers", "inheritance,intents").split(","))
+                    return self.json(self.state.project.neighbors(query.get("id", ""), query.get("depth", 1), layers))
+                except KeyError:
+                    raise ValueError("Parâmetro inválido.") from None
             if url.path == "/api/source":
                 if not self.state.project:
                     raise ValueError("Importe um projeto primeiro.")
@@ -243,14 +282,22 @@ def add_arguments(parser):
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--manifest", help="AndroidManifest.xml decodificado (padrão: procurar perto da pasta)")
+    parser.add_argument("--no-cache", action="store_true", help="Não usar o cache de indexação em disco")
+    parser.add_argument("--workers", type=int, help="Processos de indexação (padrão: automático; 1 = serial)")
 
 
 def serve(args, parser):
     try:
-        project = Project(args.path or BASE / "examples" / "pedidos", demo=not args.path, manifest=args.manifest)
+        options = {
+            "cache": not args.no_cache and args.path is not None,
+            "workers": args.workers,
+        }  # the demo is never cached
+        project = Project(
+            args.path or BASE / "examples" / "pedidos", demo=not args.path, manifest=args.manifest, **options
+        )
     except (ValueError, OSError) as error:
         parser.exit(1, f"{error}\n")
-    state = State(project)
+    state = State(project, cache=not args.no_cache, workers=args.workers)
     try:
         server = ThreadingHTTPServer(("127.0.0.1", args.port), partial(Handler, state=state))
     except OSError as error:

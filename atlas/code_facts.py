@@ -605,7 +605,7 @@ def collect(language, tree, data, declarations, index):
         if 2 <= len(raw) <= 300:
             owner = facts.owner(literal.start_byte)
             if owner is not None and len(owner["_strings"]) < MAX_SEARCH_STRINGS:
-                owner["_strings"].append(raw[:120])
+                owner["_strings"].append(raw[:120].decode("utf-8", "replace"))  # str: JSON-cacheable
     if index.string_patterns:
         for literal in captures.get("string", ()):
             if not index.string_prefilter_bytes.search(literal.text.strip(b'"')):
