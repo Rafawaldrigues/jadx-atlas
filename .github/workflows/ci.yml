@@ -69,3 +69,15 @@ jobs:
           echo "$RUNNER_TEMP/jadx/bin" >> "$GITHUB_PATH"
       - run: python -m pip install -e .
       - run: python -m unittest tests.test_jadx_integration -v
+
+  bench:
+    name: Benchmark (informative)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - run: python -m pip install -e .
+      - run: python scripts/bench.py --sizes 2000,10000
