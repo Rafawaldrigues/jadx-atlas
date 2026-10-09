@@ -108,3 +108,15 @@ dialog{background:#e8e8e8;border:2px solid #a0a0a0;box-shadow:2px 3px 12px #0003
 .legend-line.register{border-top:2px dashed #a05000;position:relative}
 .legend-line.register::before{content:"";position:absolute;left:-3px;top:-4px;width:6px;height:6px;border-radius:50%;background:#a05000}
 .intent-row small{white-space:normal;line-height:1.35}
+
+/* Paths (phase 5) */
+.paths-form{display:grid;gap:6px;margin:6px 0 10px;font-size:11px}
+.paths-form label{display:flex;justify-content:space-between;align-items:center;gap:6px;color:#202020}
+.paths-form label.inline{justify-content:flex-start}
+.paths-form select{max-width:190px;font-size:10px;padding:3px}
+.path-card{background:#fff;border:1px solid #a0a0a0;padding:6px;margin:8px 0}
+.path-card.confidence-medium{border-style:dashed}.path-card.confidence-low{border-style:dotted}
+.path-step small{white-space:normal;line-height:1.35}
+.paths-panel[hidden]{display:none}
+.inspector-tabs{flex-wrap:wrap;row-gap:2px}
+.inspector-tabs button{padding:3px 5px;font-size:9px}

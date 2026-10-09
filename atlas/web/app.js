@@ -115,6 +115,7 @@ async function loadProject() {
   renderSurfaceChrome();
   renderRoleFilter();
   renderFindingsChrome();
+  renderPathsChrome();
   const filter = $('#package-filter');
   filter.replaceChildren(new Option('Todos os pacotes', ''));
   [...new Set(project.nodes.filter(n => !n.external).map(n => n.package))].sort().forEach(p => filter.add(new Option(p || '(sem pacote)', p || '__default')));
@@ -341,6 +342,7 @@ function renderDetails() {
   top.append(hierarchyActions); root.append(top);
   if (node.findings) root.append(findingsSection(node));
   if (state.intentOut.has(node.id) || state.intentIn.has(node.id) || node.intents) root.append(intentsSection(node));
+  if (!node.external && state.project.stats.usesEdges) root.append(usesSection(node));
   if (node.roles?.length) root.append(rolesSection(node));
   if (node.component) root.append(componentSection(node));
   else if (node.applicationClass) root.append(make('div', 'external-note', 'Classe Application declarada no AndroidManifest: é executada antes de qualquer componente.'));
@@ -475,7 +477,7 @@ function renderSurface() {
   root.append(list);
 }
 
-const PANELS = { class: 'details', surface: 'surface', findings: 'findings' };
+const PANELS = { class: 'details', surface: 'surface', findings: 'findings', paths: 'paths' };
 
 function setPanel(panel) {
   state.panel = panel;
@@ -486,6 +488,70 @@ function setPanel(panel) {
   }
   if (panel === 'surface') renderSurface();
   if (panel === 'findings') renderFindings();
+}
+
+// Paths (phase 5): computed on demand by the server; drawn as a temporary view on the map.
+function renderPathsChrome() {
+  const entries = state.project.pathEntries || [];
+  $('#tab-paths').hidden = !entries.length;
+  const entry = $('#path-entry');
+  entry.replaceChildren();
+  for (const item of entries) entry.add(new Option(`${item.id.split('.').pop()} — ${item.reasons.join(', ')}`, item.id));
+  const target = $('#path-target');
+  target.replaceChildren(new Option('classes com achado ≥ medium', ''), new Option('classe selecionada no mapa', '__selected'));
+  for (const id of state.project.pathTargets || []) target.add(new Option(id.split('.').pop(), id));
+  $('#paths-result').replaceChildren();
+  state.pathView = null;
+}
+
+async function searchPaths(event) {
+  event.preventDefault();
+  const params = new URLSearchParams({ entry: $('#path-entry').value, maxDepth: $('#path-depth').value, inheritance: $('#path-inheritance').checked ? '1' : '0' });
+  const target = $('#path-target').value === '__selected' ? state.selected : $('#path-target').value;
+  if (target) params.set('target', target);
+  const root = $('#paths-result');
+  root.replaceChildren(make('p', 'relations-empty', 'Buscando…'));
+  try {
+    const result = await api(`/api/paths?${params}`);
+    root.replaceChildren();
+    root.append(make('p', 'relations-empty', `${result.paths.length} caminho(s) · ${result.note}${result.truncated ? ` · busca interrompida por limite de ${result.truncated}` : ''}`));
+    if (result.paths.length) {
+      const copy = make('button', 'subtle', 'Copiar todos como texto');
+      copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(result.text); toast('Caminhos copiados.'); } catch { toast('O navegador não permitiu copiar.'); } });
+      root.append(copy);
+    }
+    result.paths.forEach((path, index) => root.append(pathCard(path, index, result.entry)));
+  } catch (error) {
+    root.replaceChildren(make('div', 'error-box', error.message));
+  }
+}
+
+function pathCard(path, index, entry) {
+  const card = make('section', `path-card confidence-${path.confidence}`);
+  const head = make('div', 'relations-title');
+  head.append(make('span', '', `CAMINHO ${index + 1} → ${path.target.split('.').pop()}`), make('small', '', `${path.length} passo(s) · ${path.confidence}`));
+  card.append(head);
+  const show = make('button', 'focus-class', '◎ Destacar no mapa');
+  show.addEventListener('click', () => showPath(entry, path));
+  card.append(show);
+  for (const step of path.steps) {
+    const row = make('button', 'relation-button path-step');
+    const text = make('span');
+    text.append(make('strong', '', `${step.from.split('.').pop()} → ${step.to.split('.').pop()}`),
+      make('small', '', `${step.kind} · ${step.via} · ${step.file}${step.line ? `:${step.line}` : ''} · ${step.confidence}`));
+    row.append(text, make('span', 'arrow', '⌘'));
+    row.title = 'Abrir a evidência no código';
+    row.addEventListener('click', () => { const node = state.nodes.get(step.from); if (node) openSource(node, step.line); });
+    card.append(row);
+  }
+  return card;
+}
+
+function showPath(entry, path) {
+  const nodes = [entry, ...path.steps.map(s => s.to)];
+  state.pathView = { nodes, edges: path.steps.map((s, i) => ({ id: `p${i}`, source: s.from, target: s.to, kind: s.kind, via: s.via, line: s.line, confidence: s.confidence, path: true })) };
+  renderGraph();
+  $('#graph-status').textContent = 'Caminho possível destacado · use ↺ para voltar ao mapa';
 }
 
 // Findings (phase 3): candidates for manual review, never verdicts.
@@ -522,6 +588,29 @@ function renderFindings() {
   root.append(make('p', 'relations-empty', `${findings.length.toLocaleString('pt-BR')} candidatos. Confiança high: tipo do receptor confirmado pelos imports; medium: método e import batem; low: só o nome do método.`));
   for (const finding of findings.slice(0, 500)) root.append(findingButton(finding, true));
   if (findings.length > 500) root.append(make('p', 'relations-empty', `Mostrando 500 de ${findings.length}. Use os filtros ou exporte o JSON.`));
+}
+
+function usesSection(node) {
+  const section = make('section', 'relations-section uses-section');
+  const button = make('button', 'focus-class', '⇄ Referências de tipo (uses)');
+  button.title = 'Classes do projeto que esta classe cria, chama estaticamente ou declara como variável, e vice-versa';
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    try {
+      const uses = await api(`/api/uses?id=${encodeURIComponent(node.id)}`);
+      const list = (items, arrow) => items.map(item => {
+        const row = make('button', 'relation-button');
+        const text = make('span');
+        text.append(make('strong', '', `${arrow} ${item.id.split('.').pop()}`), make('small', '', `${item.id} · L${item.line}`));
+        row.append(text, make('span', 'arrow', '↗'));
+        row.addEventListener('click', () => select(item.id));
+        return row;
+      });
+      button.replaceWith(make('div', 'relations-title', `USA (${uses.out.length}) · É USADA POR (${uses.in.length})${uses.truncated ? ' · lista truncada' : ''}`), ...list(uses.out, '→'), ...list(uses.in, '←'));
+    } catch (error) { toast(error.message); button.disabled = false; }
+  });
+  section.append(button);
+  return section;
 }
 
 function intentsSection(node) {
@@ -629,6 +718,9 @@ function setLayer(layer, render = true) {
 }
 
 function visibleGraph() {
+  if (state.pathView) {
+    return { nodes: state.pathView.nodes.map(id => state.nodes.get(id)).filter(Boolean), edges: state.pathView.edges, total: state.pathView.nodes.length };
+  }
   // Inheritance and Intent edges live in separate payload arrays; the layer picks which ones are drawn.
   const inheritance = state.layer === 'intents' ? [] : state.project.edges;
   const intents = state.layer === 'inheritance' ? [] : (state.project.intentEdges || []);
@@ -698,7 +790,7 @@ function graphElements(graph) {
   return [
     ...graph.nodes.map(n => ({ data: { id: n.id, label: nodeLabel(n) }, classes: `${n.kind} ${n.external ? 'external' : ''} ${['ambiguous', 'unresolved'].includes(n.resolution) ? 'uncertain' : ''} ${surfaceClass(n)}` })),
     ...graph.edges.map(e => ({ data: { id: e.id, source: e.source, target: e.target, label: e.via ? `${e.via} L${e.line}` : e.kind },
-      classes: `${e.kind}${e.via ? ` intent ${e.confidence}` : ''}` })),
+      classes: `${e.kind}${e.via && !e.path ? ` intent ${e.confidence}` : ''}${e.path ? ' path' : ''}` })),
   ];
 }
 
@@ -730,6 +822,7 @@ function renderGraph() {
 }
 
 function setMode(mode) {
+  state.pathView = null;
   if (mode !== 'focus') state.fullHierarchy = false;
   state.mode = mode;
   $('#mode-all').classList.toggle('active', mode === 'all');
@@ -740,6 +833,7 @@ function setMode(mode) {
 }
 
 function resetFilters(render = true) {
+  state.pathView = null;
   $('#package-filter').value = '';
   $('#show-extends').checked = $('#show-implements').checked = $('#show-external').checked = true;
   $('#depth').value = '1'; $('#direction').value = 'both';
@@ -885,6 +979,7 @@ function setup() {
       { selector: 'node:selected', style: { 'background-color': '#316ac5', 'border-color': '#204a87', 'border-width': 2, 'color': '#ffffff', 'font-weight': 'bold' } },
       { selector: 'edge', style: { 'curve-style': 'bezier', 'width': 1.4, 'line-color': '#204a87', 'target-arrow-color': '#204a87', 'target-arrow-shape': 'triangle', 'arrow-scale': 0.8,
         'label': 'data(label)', 'font-size': 9, 'font-family': 'Consolas, monospace', 'color': '#204a87', 'text-background-color': '#ffffff', 'text-background-opacity': 1, 'text-background-padding': 4, 'text-rotation': 'autorotate', 'text-margin-y': -1, 'overlay-opacity': 0 } },
+      { selector: 'edge.path', style: { 'line-color': '#a00000', 'target-arrow-color': '#a00000', 'target-arrow-shape': 'triangle-backcurve', 'width': 3, 'line-style': 'solid', 'color': '#a00000' } },
       { selector: 'edge.intent', style: { 'line-color': '#a05000', 'target-arrow-color': '#a05000', 'target-arrow-shape': 'vee', 'line-style': 'dashed', 'line-dash-pattern': [8, 4], 'color': '#a05000', 'width': 1.8 } },
       { selector: 'edge.sends_action', style: { 'line-style': 'dotted', 'line-dash-pattern': [2, 4] } },
       { selector: 'edge.registers_receiver', style: { 'source-arrow-shape': 'circle', 'source-arrow-color': '#a05000' } },
@@ -928,6 +1023,8 @@ function setup() {
   $$('[data-layer]').forEach(button => button.addEventListener('click', () => setLayer(button.dataset.layer)));
   $('#show-findings').addEventListener('click', () => setPanel('findings'));
   $('#tab-findings').addEventListener('click', () => setPanel('findings'));
+  $('#tab-paths').addEventListener('click', () => setPanel('paths'));
+  $('#paths-form').addEventListener('submit', searchPaths);
   ['filter-severity', 'filter-category', 'filter-confidence'].forEach(id => $('#' + id).addEventListener('change', renderFindings));
   $('#tab-class').addEventListener('click', () => setPanel('class'));
   $('#tab-surface').addEventListener('click', () => setPanel('surface'));
