@@ -2,10 +2,11 @@
   "name": "jadx-atlas",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Explorador local de herança e interfaces em código Java exportado pelo JADX",
   "scripts": {
     "vendor": "node scripts/vendor.mjs",
-    "check": "node --check atlas/web/app.js"
+    "check": "node --check atlas/web/app.js && node --check atlas/web/logic.js && node --test 'tests/web/*.test.js'"
   },
   "dependencies": {
     "cytoscape": "3.33.1",
