@@ -137,7 +137,8 @@ class AnnotationTests(unittest.TestCase):
                 )
                 store.update("A")  # all empty: removes the entry
                 self.assertEqual(Annotations(analysed).load(), {})
-                self.assertTrue(str(store.file).startswith(data))
+                # resolve(): macOS temp dirs live under /private/var, Windows may expand 8.3 short names.
+                self.assertTrue(store.file.is_relative_to(Path(data).resolve()))
             self.assertEqual(sorted(p.name for p in Path(analysed).rglob("*")), before)
 
     def test_refuses_data_dir_inside_analysed_folder(self):
