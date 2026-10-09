@@ -1115,10 +1115,17 @@ function setup() {
   $('#filter-role').addEventListener('change', event => { state.role = event.target.value; state.listLimit = 200; renderList(); if (state.mode === 'all') renderGraph(); });
   $('#jump-declaration').addEventListener('click', jumpDeclaration);
   $('#copy-source').addEventListener('click', async () => { try { await navigator.clipboard.writeText(state.source); toast('Código copiado.'); } catch { toast('O navegador não permitiu copiar. Selecione o texto no painel.'); } });
-  $('#export-graph').addEventListener('click', () => {
-    if (!state.project) return;
-    const blob = new Blob([JSON.stringify(state.project, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob), link = make('a'); link.href = url; link.download = 'jadx-atlas.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // Exports go through the server so the JSON follows the documented schema and never carries the absolute path.
+  const download = (text, name, type) => {
+    const url = URL.createObjectURL(new Blob([text], { type })), link = make('a');
+    link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const anonymize = () => ($('#export-anonymize').checked ? '1' : '0');
+  $('#export-graph').addEventListener('click', async () => {
+    try { download(JSON.stringify(await api(`/api/report?format=json&anonymize=${anonymize()}`), null, 2), 'jadx-atlas.json', 'application/json'); } catch (error) { toast(error.message); }
+  });
+  $('#export-report').addEventListener('click', async () => {
+    try { download((await api(`/api/report?format=md&anonymize=${anonymize()}`)).markdown, 'jadx-atlas-relatorio.md', 'text/markdown'); } catch (error) { toast(error.message); }
   });
   document.addEventListener('keydown', event => {
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName) || $('dialog[open]')) return;
