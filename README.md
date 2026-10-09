@@ -67,6 +67,14 @@ O Atlas liga telas e componentes pelas chamadas de Intent: `startActivity`, `sta
 
 A aba **Caminhos** procura, a partir de uma entrada exposta (componente exportado, deep link, Application), rotas até classes com candidato a achado, seguindo arestas de Intent, referências de tipo (`uses`: criação de objeto, chamada estática, tipo de variável) e, opcionalmente, herança. São os caminhos mais curtos primeiro, com limites de profundidade, quantidade e tempo, ordem determinística e evidência (arquivo:linha) em cada passo. **É um caminho possível, não prova de alcançabilidade nem de exploração.** Também existe em `GET /api/paths?entry=<classe>&target=<classe>&maxDepth=6`.
 
+## Comparar versões
+
+```bash
+jadx-atlas diff app-v1/sources app-v2/sources --format md --out diff.md --fail-on exported-added,permission-added
+```
+
+Mostra o que mudou na superfície de ataque: componentes novos ou removidos, `exported` que passou de `false` para `true`, permissões, deep links, flags de `<application>`, candidatos a achado novos e removidos (a identidade não depende da linha) e mudanças na herança dos componentes. Classes ofuscadas renomeadas são pareadas só como **possível correspondência**. Com `--fail-on`, o código de saída é 2 quando a mudança aparece, o que serve para CI. Na interface, use **⇄ Comparar versões**.
+
 ## Explorar
 
 - **Busca**: localiza pelo nome da classe, nome completo, pacote ou caminho do arquivo. Atalho `/`.
