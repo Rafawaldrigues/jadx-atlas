@@ -16,7 +16,7 @@ import time
 from tree_sitter import Language, Parser
 import tree_sitter_java
 
-from . import code_facts
+from . import code_facts, parallel
 from . import manifest as manifest_module
 from . import paths as paths_module
 from . import roles as roles_module
@@ -225,7 +225,15 @@ class Cancelled(Exception):
 
 class Project:
     def __init__(
-        self, root, progress=lambda *_: None, cancelled=lambda: False, demo=False, manifest=None, findings=True
+        self,
+        root,
+        progress=lambda *_: None,
+        cancelled=lambda: False,
+        demo=False,
+        manifest=None,
+        findings=True,
+        workers=None,
+        cache=False,
     ):
         started = time.perf_counter()
         self.root = Path(root).expanduser().resolve()
@@ -248,42 +256,70 @@ class Project:
                 "Nenhum arquivo .java encontrado. Exporte o código no JADX e selecione a pasta sources ou sua pasta principal."
             )
         progress(0, len(paths), "Lendo declarações Java")
-        parse_errors = 0
-        for index, file in enumerate(paths):
-            if cancelled():
-                raise Cancelled()
-            relative = file.relative_to(self.root).as_posix()
+        relatives = [file.relative_to(self.root).as_posix() for file in paths]
+        self.workers = workers if workers else parallel.default_workers(len(relatives))
+        self.cache_hit = False
+        cache = parallel.IndexCache(self.root, findings) if cache else None
+        cached = cache.load() if cache else {}
+        fresh = []
+        for relative in relatives:
+            entry = cached.get(relative)
             try:
-                if file.is_symlink():
-                    raise ValueError("Link simbólico ignorado")
-                stat = file.stat()
-                if stat.st_size > MAX_FILE_BYTES:
-                    raise ValueError("Arquivo maior que 8 MiB; ignorado")
-                data = file.read_bytes()
-                classes, has_error = parse_file(data, relative, rules_module.default_index() if findings else None)
-                self.files[relative] = (stat.st_mtime_ns, stat.st_size)
-                if has_error:
-                    parse_errors += 1
+                stat = (self.root / relative).stat()
+            except OSError:
+                entry = None
+            # Reuse a cached parse only for an unchanged regular file (same mtime and size).
+            if not (
+                entry
+                and entry["stat"]
+                and entry["stat"] == [stat.st_mtime_ns, stat.st_size]
+                and not (self.root / relative).is_symlink()
+            ):
+                fresh.append(relative)
+        self.cache_hit = bool(cached) and len(fresh) < len(relatives)
+        parsed = dict.fromkeys(relatives)
+        fresh_set = set(fresh)  # a list here would make this loop quadratic on large apps
+        for relative in relatives:
+            if relative not in fresh_set:
+                parsed[relative] = cached[relative]
+        done = len(relatives) - len(fresh)
+        for result in parallel.iter_parsed(self.root, fresh, findings, self.workers, cancelled):
+            parsed[result["relative"]] = result
+            done += 1
+            if done % 25 == 0 or done == len(relatives):
+                progress(done, len(relatives), result["relative"])
+        if cache:
+            try:
+                cache.save(parsed)
+            except OSError as error:
+                warnings.append({"path": None, "message": f"Cache em disco não gravado: {error}"})
+        parse_errors = 0
+        for relative in relatives:  # input order: duplicates keep the first occurrence, as before
+            result = parsed[relative]
+            if result["error"]:
+                warnings.append({"path": relative, "message": result["error"]})
+                continue
+            self.files[relative] = tuple(result["stat"])
+            if result["hasError"]:
+                parse_errors += 1
+                warnings.append(
+                    {
+                        "path": relative,
+                        "message": "Java incompleto ou inválido: as declarações recuperáveis foram indexadas.",
+                    }
+                )
+            for node in result["classes"]:
+                if node["id"] in self.nodes:
                     warnings.append(
                         {
                             "path": relative,
-                            "message": "Java incompleto ou inválido: as declarações recuperáveis foram indexadas.",
+                            "message": f"Declaração duplicada de {node['id']}; mantida a primeira ocorrência.",
                         }
                     )
-                for node in classes:
-                    if node["id"] in self.nodes:
-                        warnings.append(
-                            {
-                                "path": relative,
-                                "message": f"Declaração duplicada de {node['id']}; mantida a primeira ocorrência.",
-                            }
-                        )
-                    else:
-                        self.nodes[node["id"]] = node
-            except (OSError, ValueError) as error:
-                warnings.append({"path": relative, "message": str(error)})
-            if index % 25 == 0 or index + 1 == len(paths):
-                progress(index + 1, len(paths), relative)
+                else:
+                    self.nodes[node["id"]] = node
+        if cancelled():
+            raise Cancelled()
         if not self.nodes:
             raise ValueError("Não foi possível recuperar nenhuma declaração Java nesta pasta.")
         progress(len(paths), len(paths), "Resolvendo herança e interfaces")
@@ -437,11 +473,109 @@ class Project:
             if node["external"]:
                 continue
             index[node["id"]] = {
-                "strings": [s.decode("utf-8", "replace") for s in dict.fromkeys(node.get("_strings", []))],
+                "strings": list(dict.fromkeys(node.get("_strings", []))),
                 "roles": [r["role"] for r in node.get("roles", ())],
                 "rules": sorted(rules_by_class.get(node["id"], ())),
             }
         return index
+
+    def payload_bytes(self):
+        """Serialised payload size, computed once (the payload never changes after indexing)."""
+        if not hasattr(self, "_payload_bytes"):
+            self._payload_bytes = len(json.dumps(self.payload, ensure_ascii=False).encode())
+        return self._payload_bytes
+
+    def summary(self):
+        """Small overview for large projects: everything except the node/edge/finding lists."""
+        payload = self.payload
+        manifest = payload.get("manifest")
+        return {
+            "schemaVersion": payload["schemaVersion"],
+            "name": payload["name"],
+            "demo": payload["demo"],
+            "stats": payload["stats"],
+            "warnings": len(payload["warnings"]),
+            "manifest": manifest,
+            "pathEntries": payload["pathEntries"],
+            "pathTargets": payload["pathTargets"],
+            "rules": payload["rules"],
+        }
+
+    def list(self, page=0, size=200, kind="", role="", severity="", query=""):
+        """Paginated, stable (sorted by id) list of project classes with light fields."""
+        page, size = max(0, int(page)), max(1, min(int(size), 1000))
+        rank = {"info": 0, "low": 1, "medium": 2, "high": 3}
+        needle = (query or "").lower()
+        rows = []
+        for class_id in sorted(k for k, n in self.nodes.items() if not n["external"]):
+            node = self.nodes[class_id]
+            if kind == "interface" and node["kind"] not in {"interface", "annotation"}:
+                continue
+            if kind == "class" and node["kind"] in {"interface", "annotation"}:
+                continue
+            if role and not any(r["role"] == role for r in node.get("roles", ())):
+                continue
+            if severity and not any(rank[s] >= rank[severity] for s in node.get("findings", {})):
+                continue
+            if needle and needle not in class_id.lower():
+                continue
+            rows.append(
+                {
+                    "id": class_id,
+                    "name": node["name"],
+                    "package": node["package"],
+                    "kind": node["kind"],
+                    "roles": [r["role"] for r in node.get("roles", ())],
+                    "findings": node.get("findings", {}),
+                    "exported": (node.get("component") or {}).get("exported"),
+                }
+            )
+        return {"page": page, "size": size, "total": len(rows), "items": rows[page * size : (page + 1) * size]}
+
+    def neighbors(self, class_id, depth=1, layers=("inheritance", "intents"), limit=300):
+        """Nodes and edges around one class (both directions), for drawing only the selected neighbourhood."""
+        if class_id not in self.nodes:
+            raise ValueError("Classe desconhecida.")
+        depth = max(1, min(int(depth), 3))
+        edges = []
+        if "inheritance" in layers:
+            edges += self.edges
+        if "intents" in layers:
+            edges += self.intent_edges
+        if "uses" in layers:
+            edges += [
+                {"id": f"u{i}", "source": s, "target": e[0], "kind": "uses", "line": e[3]}
+                for i, (s, e) in enumerate(
+                    (s, e) for s, es in self.flow.adjacency.items() for e in es if e[1] == "uses"
+                )
+            ]
+        around = {}
+        for edge in edges:
+            around.setdefault(edge["source"], []).append(edge)
+            around.setdefault(edge["target"], []).append(edge)
+        seen, frontier, chosen, truncated = {class_id}, [class_id], {}, False
+        for _ in range(depth):
+            following = []
+            for node_id in frontier:
+                for edge in sorted(around.get(node_id, ()), key=lambda e: e["id"]):
+                    other = edge["target"] if edge["source"] == node_id else edge["source"]
+                    chosen[edge["id"]] = edge
+                    if other not in seen:
+                        if len(seen) >= limit:
+                            truncated = True
+                            continue
+                        seen.add(other)
+                        following.append(other)
+            frontier = following
+        nodes = [self.nodes[n] for n in sorted(seen) if n in self.nodes]
+        kept = [e for e in chosen.values() if e["source"] in seen and e["target"] in seen]
+        return {
+            "id": class_id,
+            "depth": depth,
+            "nodes": nodes,
+            "edges": sorted(kept, key=lambda e: e["id"]),
+            "truncated": truncated,
+        }
 
     def search(self, query, limit=100):
         """Case-insensitive substring search over names, aliases, packages, roles, rules and strings."""
