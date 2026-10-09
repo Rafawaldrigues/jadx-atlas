@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # tree-sitter 0.26.0 segfaults in the query engine on real JADX output (tests still pass).
+      - dependency-name: tree-sitter
+        versions: ["0.26.x"]
   - package-ecosystem: npm
     directory: /
     schedule:
