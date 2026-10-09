@@ -19,7 +19,7 @@ def build_parser():
         prog="jadx-atlas", description="JADX Atlas: attack-surface map for Android apps, built on JADX output"
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    commands = parser.add_subparsers(dest="command", metavar="COMANDO")
+    commands = parser.add_subparsers(dest="command", metavar="COMMAND")
     for name, (add_arguments, run, help_text) in COMMANDS.items():
         command = commands.add_parser(name, help=help_text, description=help_text)
         add_arguments(command)

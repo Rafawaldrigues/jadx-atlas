@@ -1,4 +1,4 @@
-"""Compare the attack surface of two versions of the same app (phase 6).
+"""Compare the attack surface of two versions of the same app.
 
 Order of trust: manifest facts (stable names) first, then findings, then the
 hierarchy of declared components. Obfuscated classes are renamed between
@@ -314,7 +314,7 @@ def _cell(value):
 def add_arguments(parser):
     parser.add_argument("old", help="JADX export of the old version (the sources folder or the output folder)")
     parser.add_argument("new", help="JADX export of the new version")
-    parser.add_argument("--format", choices=("md", "json"), default="md")
+    parser.add_argument("--format", choices=("md", "json"), default="md", help="Output format (default: md)")
     parser.add_argument("--out", type=Path, help="Output file (default: standard output)")
     parser.add_argument(
         "--fail-on",

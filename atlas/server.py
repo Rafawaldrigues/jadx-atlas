@@ -30,7 +30,7 @@ class State:
         self.lock = threading.Lock()
         self.options = {"cache": cache, "workers": workers}
         self.project = initial
-        # Second slot for "compare with another version" (phase 6): at most two projects in memory.
+        # Second slot for "compare with another version": at most two projects in memory.
         self.compare = None
         self.cancel = threading.Event()
         self.status = {
@@ -304,8 +304,8 @@ class Handler(SimpleHTTPRequestHandler):
 
 def add_arguments(parser):
     parser.add_argument("path", nargs="?", help="JADX export (the sources folder or the output folder)")
-    parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--port", type=int, default=8765, help="Local port (default: 8765)")
+    parser.add_argument("--no-browser", action="store_true", help="Do not open the browser")
     parser.add_argument("--manifest", help="Decoded AndroidManifest.xml (default: look next to the folder)")
     parser.add_argument("--no-cache", action="store_true", help="Do not use the on-disk index cache")
     parser.add_argument("--verbose", action="store_true", help="Log each request (one JSON line, no code content)")

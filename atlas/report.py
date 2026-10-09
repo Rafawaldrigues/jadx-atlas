@@ -1,4 +1,4 @@
-"""Exportable reports (phase 7): unified JSON and a Markdown write-up skeleton.
+"""Exportable reports: unified JSON and a Markdown write-up skeleton.
 
 Redaction by default: secrets stay masked, snippets are capped at 160
 characters and the absolute import path is never exported. `--anonymize`
@@ -249,7 +249,9 @@ def to_json(report):
 
 def add_arguments(parser):
     parser.add_argument("path", help="JADX export (the sources folder or the output folder)")
-    parser.add_argument("--format", choices=("md", "json"), default="md")
+    parser.add_argument(
+        "--format", choices=("md", "json"), default="md", help="md: report, json: full index (default: md)"
+    )
     parser.add_argument("--out", type=Path, help="Output file (default: standard output)")
     parser.add_argument("--manifest", help="Decoded AndroidManifest.xml (default: look next to the folder)")
     parser.add_argument("--apk", help="Record the SHA-256 of this APK (hash only; its content is not analysed)")
