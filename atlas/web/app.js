@@ -1,4 +1,6 @@
-'use strict';
+import * as logic from './logic.js';
+
+const { isPotential, isExposed, exposureLabel, surfaceClass, looksObfuscated, LIMIT } = logic;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -8,7 +10,6 @@ const make = (tag, className, text) => {
   if (text !== undefined) el.textContent = text;
   return el;
 };
-const LIMIT = 600;
 const state = { project: null, nodes: new Map(), incoming: new Map(), outgoing: new Map(), selected: null,
   kind: 'all', query: '', mode: 'all', history: [], listLimit: 200, revision: -1,
   source: '', sourceLine: 1, sourceRequest: 0, busy: false, collapsed: new Set(), fullHierarchy: false,
@@ -17,6 +18,12 @@ const state = { project: null, nodes: new Map(), incoming: new Map(), outgoing: 
 let cy;
 let toastTimer;
 
+// Accessibility: dialogs return focus to whatever opened them.
+function openDialog(dialog) {
+  dialog.returnFocusTo = document.activeElement;
+  dialog.showModal();
+}
+
 function toast(message) {
   $('#toast').textContent = message;
   $('#toast').hidden = false;
@@ -24,9 +31,19 @@ function toast(message) {
   toastTimer = setTimeout(() => { $('#toast').hidden = true; }, 4500);
 }
 
+// Session token from the launch URL fragment (#token=...), kept for this tab only and removed from the address bar.
+const TOKEN = (() => {
+  const match = location.hash.match(/token=([A-Za-z0-9_-]+)/);
+  try {
+    if (match) { sessionStorage.setItem('atlas.token', match[1]); history.replaceState(null, '', location.pathname); }
+    return sessionStorage.getItem('atlas.token') || (match && match[1]) || '';
+  } catch { return match ? match[1] : ''; }
+})();
+
 async function api(path, body) {
-  const response = await fetch(path, body === undefined ? undefined : {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  const headers = { 'X-Atlas-Token': TOKEN };
+  const response = await fetch(path, body === undefined ? { headers } : {
+    method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || 'Não foi possível concluir a operação.');
@@ -43,36 +60,19 @@ function kindLabel(node) {
 }
 
 // Attack-surface helpers. "Potentially exported" = unknown/inconsistent with a guess of true; never shown as confirmed.
-function isPotential(component) {
-  return ['unknown', 'inconsistent'].includes(component.exported) && component.exportedGuess === true;
-}
 
-function isExposed(component) { return component.exported === true || isPotential(component); }
 
-function exposureLabel(component) {
-  if (component.exported === true) return component.permission ? `exportado · exige ${component.permission} (${component.protectionLevel || 'unknown'})` : 'exportado · sem permissão';
-  if (isPotential(component)) return component.exported === 'inconsistent' ? 'potencialmente exportado · Manifest inconsistente' : 'potencialmente exportado · valor desconhecido';
-  if (component.exported === 'unknown') return 'exportação desconhecida';
-  if (component.exported === 'inconsistent') return 'Manifest inconsistente';
-  return 'não exportado';
-}
 
 // Roles are inferred from the ancestor chain (atlas/roles.py); the first one is the most specific for display.
 function primaryRole(node) { return node.roles?.[0]; }
 
-function looksObfuscated(name) { return name.length <= 3 || /^[a-z]{1,3}(\$[a-z0-9]{1,3})*$/.test(name); }
 
-function matchesRole(node) { return !state.role || Boolean(node.roles?.some(r => r.role === state.role)); }
+function matchesRole(node) { return logic.matchesRole(node, state.role); }
 
 // Phase 8: library hiding (never the app package) and analyst aliases.
 function appPackage() { return state.project?.manifest?.package || ''; }
 
-function isHiddenLibrary(node) {
-  if (!state.hideLibraries || node.external) return false;
-  const app = appPackage();
-  if (app && (node.id + '.').startsWith(app + '.')) return false;
-  return Boolean(node.library) || state.extraPrefixes.some(prefix => (node.id + '.').startsWith(prefix));
-}
+function isHiddenLibrary(node) { return logic.isHiddenLibrary(node, { hide: state.hideLibraries, prefixes: state.extraPrefixes, app: appPackage() }); }
 
 function displayName(node) {
   const alias = state.annotations[node.id]?.alias;
@@ -81,17 +81,9 @@ function displayName(node) {
   return node.name;
 }
 
-function surfaceFilterActive() { return state.surface.exported || state.surface.deeplink || state.surface.noperm || Boolean(state.surface.type); }
+function surfaceFilterActive() { return logic.surfaceFilterActive(state.surface); }
 
-function matchesSurface(node) {
-  if (!surfaceFilterActive()) return true;
-  const component = node.component;
-  if (!component) return false;
-  return (!state.surface.exported || isExposed(component)) &&
-    (!state.surface.deeplink || component.deepLinks.length > 0) &&
-    (!state.surface.noperm || !component.permission) &&
-    (!state.surface.type || component.type === state.surface.type);
-}
+function matchesSurface(node) { return logic.matchesSurface(node, state.surface); }
 
 async function loadProject() {
   const project = await api('/api/project');
@@ -153,37 +145,9 @@ async function loadProject() {
 
 function degree(id) { return (state.incoming.get(id)?.length || 0) + (state.outgoing.get(id)?.length || 0); }
 
-function ancestryOf(start = state.selected) {
-  const visited = new Set(start ? [start] : []), queue = start ? [{ id: start, depth: 0 }] : [];
-  const entries = [];
-  while (queue.length) {
-    const current = queue.shift();
-    for (const edge of state.outgoing.get(current.id) || []) {
-      const depth = current.depth + 1;
-      entries.push({ id: edge.target, depth, kind: edge.kind, direct: depth === 1, edge });
-      if (!visited.has(edge.target)) {
-        visited.add(edge.target);
-        queue.push({ id: edge.target, depth });
-      }
-    }
-  }
-  return entries;
-}
+function ancestryOf(start = state.selected) { return logic.ancestryOf(state.outgoing, start); }
 
-function rootClassOf(start = state.selected) {
-  let current = start;
-  const visited = new Set();
-  while (current && !visited.has(current)) {
-    visited.add(current);
-    const parent = (state.outgoing.get(current) || []).find(edge => {
-      const target = state.nodes.get(edge.target);
-      return edge.kind === 'extends' && target && !['interface', 'annotation'].includes(target.kind);
-    });
-    if (!parent) return current;
-    current = parent.target;
-  }
-  return current || start;
-}
+function rootClassOf(start = state.selected) { return logic.rootClassOf(state.outgoing, state.nodes, start); }
 
 function renderList() {
   const root = $('#class-list');
@@ -795,51 +759,14 @@ function visibleGraph() {
     return { nodes: state.pathView.nodes.map(id => state.nodes.get(id)).filter(Boolean), edges: state.pathView.edges, total: state.pathView.nodes.length };
   }
   if (state.grouped && state.mode === 'all' && !$('#package-filter').value) return groupedGraph();
-  // Inheritance and Intent edges live in separate payload arrays; the layer picks which ones are drawn.
-  const inheritance = state.layer === 'intents' ? [] : state.project.edges;
-  const intents = state.layer === 'inheritance' ? [] : (state.project.intentEdges || []);
-  // Unknown edge kinds (added by later phases) stay visible instead of crashing the map.
-  const edges = [...inheritance, ...intents].filter(e => ($(`#show-${e.kind}`)?.checked ?? true) &&
-    ($('#show-external').checked || (!state.nodes.get(e.target).external && !state.nodes.get(e.source).external)));
-  let ids;
-  if (state.mode === 'focus') {
-    ids = new Set(state.selected ? [state.selected] : []);
-    const depth = Number($('#depth').value), direction = $('#direction').value;
-    const adjacent = new Map();
-    const connect = (from, to) => { if (!adjacent.has(from)) adjacent.set(from, []); adjacent.get(from).push(to); };
-    for (const e of edges) {
-      if (direction !== 'children') connect(e.source, e.target);
-      if (direction !== 'parents') connect(e.target, e.source);
-    }
-    let frontier = [...ids];
-    const levels = state.fullHierarchy ? Number.POSITIVE_INFINITY : depth;
-    for (let i = 0; i < levels && frontier.length; i++) {
-      const next = [];
-      for (const id of frontier) for (const target of adjacent.get(id) || []) if (!ids.has(target)) { ids.add(target); next.push(target); }
-      frontier = next;
-    }
-  } else {
-    const pkg = $('#package-filter').value;
-    ids = new Set(state.project.nodes.filter(n => !n.external && !isHiddenLibrary(n) && matchesSurface(n) && matchesRole(n) && (!pkg || n.package === (pkg === '__default' ? '' : pkg))).map(n => n.id));
-    const seeds = new Set(ids);
-    for (const e of edges) if (seeds.has(e.source) && (state.nodes.get(e.target).external || pkg)) ids.add(e.target);
-    if (state.selected && !pkg && ($('#show-external').checked || !state.nodes.get(state.selected).external)) ids.add(state.selected);
-  }
-  if (!$('#show-external').checked) for (const id of ids) if (state.nodes.get(id).external) ids.delete(id);
-  const total = ids.size;
-  // A bounded canvas keeps large projects navigable; the full index stays searchable.
-  if (ids.size > LIMIT) {
-    const ordered = [...ids];
-    ordered.sort((a, b) => Number(b === state.selected) - Number(a === state.selected) || degree(b) - degree(a));
-    ids = new Set(ordered.slice(0, LIMIT));
-  }
-  return { nodes: [...ids].map(id => state.nodes.get(id)), edges: edges.filter(e => ids.has(e.source) && ids.has(e.target)), total };
+  return logic.selectGraph(state.project, state.nodes, {
+    mode: state.mode, selected: state.selected, layer: state.layer, fullHierarchy: state.fullHierarchy,
+    depth: Number($('#depth').value), direction: $('#direction').value, pkg: $('#package-filter').value,
+    showKind: kind => $(`#show-${kind}`)?.checked ?? true, showExternal: $('#show-external').checked,
+    keep: n => !isHiddenLibrary(n) && matchesSurface(n) && matchesRole(n), limit: LIMIT, degree,
+  });
 }
 
-function surfaceClass(node) {
-  if (!node.component) return '';
-  return node.component.exported === true ? 'exported' : isPotential(node.component) ? 'potential' : '';
-}
 
 function nodeLabel(n) {
   if (n.kind === 'package') return `${n.name.length > 27 ? '…' + n.name.slice(-25) : n.name}\n▣ ${n.count} classes${n.findings ? ` · ${n.findings} achados` : ''}`;
@@ -864,26 +791,7 @@ function nodeLabel(n) {
 
 // Aggregated package view: one node per package, edges summed; clicking a package expands it.
 function groupedGraph() {
-  const packages = new Map();
-  for (const node of state.project.nodes) {
-    if (node.external || isHiddenLibrary(node) || !matchesSurface(node) || !matchesRole(node)) continue;
-    const key = node.package || '(sem pacote)';
-    if (!packages.has(key)) packages.set(key, { id: `pkg:${key}`, name: key, kind: 'package', external: false, package: key, count: 0, findings: 0 });
-    const group = packages.get(key);
-    group.count += 1;
-    group.findings += node.findings ? (node.findings.high || 0) + (node.findings.medium || 0) : 0;
-  }
-  const counts = new Map();
-  const edges = [...state.project.edges, ...(state.layer === 'inheritance' ? [] : state.project.intentEdges || [])];
-  for (const edge of state.layer === 'intents' ? (state.project.intentEdges || []) : edges) {
-    const a = state.nodes.get(edge.source), b = state.nodes.get(edge.target);
-    if (!a || !b || a.external || b.external) continue;
-    const from = `pkg:${a.package || '(sem pacote)'}`, to = `pkg:${b.package || '(sem pacote)'}`;
-    if (from === to || !packages.has(a.package || '(sem pacote)') || !packages.has(b.package || '(sem pacote)')) continue;
-    counts.set(`${from}→${to}`, (counts.get(`${from}→${to}`) || 0) + 1);
-  }
-  const groupEdges = [...counts].map(([key, count], index) => { const [source, target] = key.split('→'); return { id: `g${index}`, source, target, kind: 'grouped', via: `${count}×`, line: '' }; });
-  return { nodes: [...packages.values()], edges: groupEdges, total: packages.size };
+  return logic.groupPackages(state.project, state.nodes, { layer: state.layer, keep: n => !isHiddenLibrary(n) && matchesSurface(n) && matchesRole(n) });
 }
 
 function graphElements(graph) {
@@ -954,7 +862,7 @@ async function openSource(node, focusLine = null, finding = null) {
   $('#source-code').replaceChildren(make('p', 'no-results', 'Lendo arquivo…'));
   $('#source-notice').textContent = 'A linha da declaração está destacada. Visualização somente para leitura.';
   $('#copy-source').disabled = $('#jump-declaration').disabled = true;
-  $('#source-dialog').showModal();
+  openDialog($('#source-dialog'));
   try {
     const source = await api(`/api/source?id=${encodeURIComponent(node.id)}`);
     if (request !== state.sourceRequest) return;
@@ -1110,7 +1018,7 @@ function showWarnings() {
     row.append(make('code', '', warning.path), make('p', '', warning.message)); root.append(row);
   }
   if (warnings.length > 300) root.append(make('p', '', `${warnings.length - 300} outros avisos disponíveis na exportação JSON.`));
-  $('#warnings-dialog').showModal();
+  openDialog($('#warnings-dialog'));
 }
 
 function updateZoomControls() {
@@ -1191,14 +1099,25 @@ function setup() {
   $('#fit').addEventListener('click', () => { cy.animate({ fit: { eles: cy.elements(), padding: 65 }, duration: 180 }); });
   $('#layout').addEventListener('click', layoutGraph);
   $('#back').addEventListener('click', () => { const id = state.history.pop(); if (id) select(id, false); });
-  $('#open-project').addEventListener('click', () => { $('#import-dialog').showModal(); $('#project-path').focus(); });
+  $('#open-project').addEventListener('click', () => { openDialog($('#import-dialog')); $('#project-path').focus(); });
   $$('.close-dialog').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
+  $$('dialog').forEach(dialog => dialog.addEventListener('close', () => { if (dialog.returnFocusTo?.isConnected) dialog.returnFocusTo.focus(); }));
+  // WAI-ARIA tabs: arrow keys move between the visible inspector tabs.
+  $('.inspector-tabs').addEventListener('keydown', event => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    const tabs = $$('.inspector-tabs [role="tab"]').filter(tab => !tab.hidden);
+    const index = tabs.indexOf(document.activeElement);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    event.preventDefault();
+    tabs[next].focus();
+    tabs[next].click();
+  });
   $('#source-dialog').addEventListener('close', () => { state.sourceRequest++; });
   $('#import-form').addEventListener('submit', event => { event.preventDefault(); importProject(); });
   $('#load-demo').addEventListener('click', () => importProject(true));
   $('#cancel-import').addEventListener('click', async () => { try { await api('/api/cancel', {}); } catch (error) { toast(error.message); } });
   $('#show-warnings').addEventListener('click', showWarnings);
-  $('#open-compare').addEventListener('click', () => { $('#compare-dialog').showModal(); $('#compare-path').focus(); });
+  $('#open-compare').addEventListener('click', () => { openDialog($('#compare-dialog')); $('#compare-path').focus(); });
   $('#compare-form').addEventListener('submit', startCompare);
   $('#compare-download').addEventListener('click', downloadDiff);
   $$('input[name="other-is"]').forEach(input => input.addEventListener('change', async () => { if (!$('#compare-download').disabled) { try { renderDiff(await api(`/api/diff?otherIs=${otherIs()}`)); } catch (error) { toast(error.message); } } }));

@@ -1,0 +1,3 @@
+/* The rule Cytoscape would inject as an inline <style>. Providing it here (with the element id Cytoscape
+   looks for) lets the CSP drop 'unsafe-inline' from style-src. */
+.__________cytoscape_container { position: relative; }
