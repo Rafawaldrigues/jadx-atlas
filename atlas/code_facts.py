@@ -28,6 +28,7 @@ NAMED_DECLARATIONS = {
     "annotation_type_declaration",
 }
 MAX_TEXT = 120
+MAX_SEARCH_STRINGS = 60
 
 _QUERIES = {}
 
@@ -570,15 +571,17 @@ def collect(language, tree, data, declarations, index):
         for node in nodes:
             raw = node.text
             # Fast path: plain identifiers (the vast majority) need no tree walk; lowercase ones are variables.
+            # Obfuscated classes are lowercase (`new a()`), so case only matters for static-call receivers,
+            # where a lowercase identifier is almost always a variable (`list.add(...)`).
             if node.type in {"type_identifier", "identifier"}:
-                if not raw[:1].isupper() or raw in primitives:
+                if raw in primitives or (capture == "static" and not raw[:1].isupper()):
                     continue
                 name = raw
             else:
                 if capture == "static" and not raw[:1].isupper() and b"." not in raw:
                     continue
                 name = (raw_type_text(node) or "").replace("[]", "").encode()
-                if not name or name in primitives or not (name[:1].isupper() or b"." in name):
+                if not name or name in primitives:
                     continue
             owner = facts.owner(node.start_byte)
             if owner is None:
@@ -594,6 +597,15 @@ def collect(language, tree, data, declarations, index):
         node = tree.root_node.descendant_for_byte_range(declaration["_start"], declaration["_end"])
         body = node.child_by_field_name("body") if node is not None else None
         declaration["_string_constants"] = _string_constants(body) if body is not None else {}
+    # Search index (phase 8): a bounded sample of each class's string literals, raw text, no escapes decoded.
+    for declaration in declarations:
+        declaration["_strings"] = []
+    for literal in captures.get("string", ()):
+        raw = literal.text.strip(b'"')
+        if 2 <= len(raw) <= 300:
+            owner = facts.owner(literal.start_byte)
+            if owner is not None and len(owner["_strings"]) < MAX_SEARCH_STRINGS:
+                owner["_strings"].append(raw[:120])
     if index.string_patterns:
         for literal in captures.get("string", ()):
             if not index.string_prefilter_bytes.search(literal.text.strip(b'"')):

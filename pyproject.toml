@@ -43,7 +43,7 @@ version = { attr = "atlas.__version__" }
 include = ["atlas*"]
 
 [tool.setuptools.package-data]
-atlas = ["web/*", "web/vendor/*", "examples/**/*.java", "examples/**/*.xml", "data/*.json"]
+atlas = ["web/*", "web/vendor/*", "examples/**/*.java", "examples/**/*.xml", "data/*.json", "data/rules/*.json"]
 
 [tool.ruff]
 line-length = 120

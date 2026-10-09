@@ -12,6 +12,7 @@ import webbrowser
 
 from . import diff as diff_module
 from . import report as report_module
+from .annotations import Annotations
 from .indexer import Cancelled, Project
 
 # Package directory: holds web/ (static UI) and examples/ (demo project).
@@ -133,6 +134,13 @@ class Handler(SimpleHTTPRequestHandler):
                     raise ValueError("Importe um projeto primeiro.")
                 class_id = parse_qs(url.query).get("id", [""])[0]
                 return self.json(self.state.project.source(class_id))
+            if url.path in {"/api/search", "/api/annotations"}:
+                if not self.state.project:
+                    raise ValueError("Importe um projeto primeiro.")
+                query = parse_qs(url.query)
+                if url.path == "/api/search":
+                    return self.json(self.state.project.search(query.get("q", [""])[0], query.get("limit", ["100"])[0]))
+                return self.json({"classes": Annotations(self.state.project.root).load()})
             if url.path == "/api/report":
                 if not self.state.project:
                     raise ValueError("Importe um projeto primeiro.")
@@ -202,6 +210,16 @@ class Handler(SimpleHTTPRequestHandler):
                 if manifest is not None and not isinstance(manifest, str):
                     raise ValueError("O campo manifest deve ser um caminho.")
                 self.state.start(root.strip(), manifest=(manifest or "").strip() or None)
+            elif path == "/api/annotations":
+                if not self.state.project:
+                    raise ValueError("Importe um projeto primeiro.")
+                tags = body.get("tags", [])
+                if not isinstance(tags, list):
+                    raise ValueError("tags deve ser uma lista.")
+                classes = Annotations(self.state.project.root).update(
+                    body.get("id"), body.get("alias"), tags, body.get("note")
+                )
+                return self.json({"classes": classes}, 200)
             elif path == "/api/compare":
                 root = body.get("path")
                 if not isinstance(root, str) or not root.strip():

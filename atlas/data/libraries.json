@@ -1,0 +1,12 @@
+{
+  "_comment": "Package prefixes of common third-party libraries. A class is marked as library code when its package starts with one of these and it is not under the app's own package (from the manifest). Users can add prefixes in the UI.",
+  "version": 1,
+  "prefixes": [
+    "androidx.", "android.support.", "android.arch.", "kotlin.", "kotlinx.", "org.jetbrains.", "org.intellij.",
+    "com.google.", "com.android.", "okhttp3.", "okio.", "retrofit2.", "com.squareup.", "com.facebook.",
+    "io.reactivex.", "rx.", "dagger.", "javax.inject.", "com.fasterxml.", "org.apache.", "org.slf4j.",
+    "com.bumptech.glide.", "io.grpc.", "com.crashlytics.", "io.fabric.", "com.appsflyer.", "com.adjust.",
+    "io.sentry.", "com.airbnb.lottie.", "org.greenrobot.", "net.sqlcipher.", "org.bouncycastle.", "org.chromium.",
+    "com.jakewharton.", "io.flutter.", "com.unity3d.", "com.onesignal.", "com.amplitude.", "com.mixpanel.", "com.braze."
+  ]
+}
