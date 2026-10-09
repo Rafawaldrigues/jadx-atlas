@@ -13,7 +13,7 @@ const state = { project: null, nodes: new Map(), incoming: new Map(), outgoing: 
   kind: 'all', query: '', mode: 'all', history: [], listLimit: 200, revision: -1,
   source: '', sourceLine: 1, sourceRequest: 0, busy: false, collapsed: new Set(), fullHierarchy: false,
   surface: { exported: false, deeplink: false, noperm: false, type: '' }, role: '', panel: 'class', rules: new Map(), sourceFinding: null,
-  layer: 'inheritance', intentOut: new Map(), intentIn: new Map() };
+  layer: 'inheritance', intentOut: new Map(), intentIn: new Map(), annotations: {}, hideLibraries: false, extraPrefixes: [], grouped: false };
 let cy;
 let toastTimer;
 
@@ -64,6 +64,23 @@ function looksObfuscated(name) { return name.length <= 3 || /^[a-z]{1,3}(\$[a-z0
 
 function matchesRole(node) { return !state.role || Boolean(node.roles?.some(r => r.role === state.role)); }
 
+// Phase 8: library hiding (never the app package) and analyst aliases.
+function appPackage() { return state.project?.manifest?.package || ''; }
+
+function isHiddenLibrary(node) {
+  if (!state.hideLibraries || node.external) return false;
+  const app = appPackage();
+  if (app && (node.id + '.').startsWith(app + '.')) return false;
+  return Boolean(node.library) || state.extraPrefixes.some(prefix => (node.id + '.').startsWith(prefix));
+}
+
+function displayName(node) {
+  const alias = state.annotations[node.id]?.alias;
+  if (alias) return `${alias} (${node.name})`;
+  if (node.originalName) return `${node.name} ⟵ ${node.originalName.split('.').pop()}`;
+  return node.name;
+}
+
 function surfaceFilterActive() { return state.surface.exported || state.surface.deeplink || state.surface.noperm || Boolean(state.surface.type); }
 
 function matchesSurface(node) {
@@ -109,7 +126,9 @@ async function loadProject() {
   for (const key of ['types', 'relations', 'packages']) $('#stat-' + key).textContent = project.stats[key].toLocaleString('pt-BR');
   $('#stat-warnings').textContent = project.warnings.length.toLocaleString('pt-BR');
   $('#show-warnings').classList.toggle('has-warnings', project.warnings.length > 0);
-  $('#analysis-info').textContent = `Indexado em ${project.stats.seconds.toLocaleString('pt-BR')} s · ${project.stats.external} referências externas`;
+  const obf = project.stats.obfuscation;
+  $('#analysis-info').textContent = `Indexado em ${project.stats.seconds.toLocaleString('pt-BR')} s · ${project.stats.external} referências externas${obf ? ` · ofuscação provável: ${obf.level} (${Math.round(obf.fraction * 100)}% nomes curtos)` : ''}`;
+  try { state.annotations = (await api('/api/annotations')).classes || {}; } catch { state.annotations = {}; }
   $('#project-path').value = project.demo ? '' : project.root;
   state.rules = new Map((project.rules || []).map(rule => [rule.id, rule]));
   renderSurfaceChrome();
@@ -165,7 +184,7 @@ function renderList() {
   if (!state.project) return;
   const matches = state.project.nodes.filter(n => !n.external &&
     (state.kind === 'all' || (state.kind === 'interface' ? ['interface', 'annotation'].includes(n.kind) : !['interface', 'annotation'].includes(n.kind))) &&
-    `${n.id} ${n.path}`.toLowerCase().includes(state.query) && matchesSurface(n) && matchesRole(n));
+    `${n.id} ${n.path} ${n.originalName || ''} ${state.annotations[n.id]?.alias || ''}`.toLowerCase().includes(state.query) && matchesSurface(n) && matchesRole(n) && !isHiddenLibrary(n));
   matches.sort((a, b) => a.id.localeCompare(b.id));
   $('#search-count').textContent = matches.length.toLocaleString('pt-BR');
   if (!matches.length) {
@@ -190,7 +209,8 @@ function renderList() {
       button.dataset.id = node.id;
       button.title = node.id;
       button.setAttribute('aria-pressed', String(node.id === state.selected));
-      const local = node.package ? node.id.slice(node.package.length + 1) : node.id;
+      const alias = state.annotations[node.id]?.alias;
+      const local = (node.package ? node.id.slice(node.package.length + 1) : node.id) + (alias ? ` · ${alias}` : node.originalName ? ` ⟵ ${node.originalName.split('.').pop()}` : '');
       button.append(icon(node), make('span', 'class-name', local));
       if (node.findings) {
         const worst = ['high', 'medium', 'low', 'info'].find(s => node.findings[s]);
@@ -340,6 +360,7 @@ function renderDetails() {
   rootButton.addEventListener('click', goToRootClass);
   hierarchyActions.append(focus, complete, rootButton);
   top.append(hierarchyActions); root.append(top);
+  if (!node.external) root.append(annotationSection(node));
   if (node.findings) root.append(findingsSection(node));
   if (state.intentOut.has(node.id) || state.intentIn.has(node.id) || node.intents) root.append(intentsSection(node));
   if (!node.external && state.project.stats.usesEdges) root.append(usesSection(node));
@@ -590,6 +611,50 @@ function renderFindings() {
   if (findings.length > 500) root.append(make('p', 'relations-empty', `Mostrando 500 de ${findings.length}. Use os filtros ou exporte o JSON.`));
 }
 
+function annotationSection(node) {
+  const saved = state.annotations[node.id] || { alias: '', tags: [], note: '' };
+  const section = make('details', 'relations-section annotation-section');
+  section.open = Boolean(saved.alias || saved.tags.length || saved.note);
+  section.append(make('summary', 'relations-title', 'ANOTAÇÕES DO ANALISTA (FICAM FORA DA PASTA ANALISADA)'));
+  const alias = make('input'); alias.value = saved.alias; alias.placeholder = 'apelido (ex.: LoginActivity)'; alias.maxLength = 80;
+  const tags = make('input'); tags.value = saved.tags.join(', '); tags.placeholder = 'etiquetas separadas por vírgula';
+  const note = make('textarea'); note.value = saved.note; note.placeholder = 'nota'; note.maxLength = 2000; note.rows = 3;
+  const save = make('button', 'subtle', 'Salvar anotação');
+  save.addEventListener('click', async () => {
+    try {
+      const result = await api('/api/annotations', { id: node.id, alias: alias.value, tags: tags.value.split(','), note: note.value });
+      state.annotations = result.classes;
+      toast('Anotação salva.'); renderList(); renderGraph();
+    } catch (error) { toast(error.message); }
+  });
+  for (const [label, field] of [['Apelido', alias], ['Etiquetas', tags], ['Nota', note]]) {
+    const row = make('label', 'annotation-field'); row.append(make('span', '', label), field); section.append(row);
+  }
+  section.append(save);
+  if (node.originalName || node.sourceFile) section.append(make('p', 'relations-empty', `JADX: ${node.originalName ? `renomeada de ${node.originalName}` : ''}${node.originalName && node.sourceFile ? ' · ' : ''}${node.sourceFile ? `compilada de ${node.sourceFile}` : ''}`));
+  return section;
+}
+
+async function globalSearch(query) {
+  const root = $('#global-search');
+  if (query.length < 3) { root.hidden = true; root.replaceChildren(); return; }
+  try {
+    const result = await api(`/api/search?q=${encodeURIComponent(query)}&limit=30`);
+    if ($('#search').value.trim().toLowerCase() !== query) return;
+    root.replaceChildren(make('div', 'relations-title', `BUSCA GLOBAL · ${result.total}`));
+    for (const item of result.results) {
+      const row = make('button', 'relation-button global-row');
+      const text = make('span');
+      text.append(make('strong', '', item.id.split('.').pop()), make('small', '', `${item.field}: ${item.text}`));
+      row.append(text);
+      row.title = item.id;
+      row.addEventListener('click', () => select(item.id));
+      root.append(row);
+    }
+    root.hidden = !result.results.length;
+  } catch { root.hidden = true; }
+}
+
 function usesSection(node) {
   const section = make('section', 'relations-section uses-section');
   const button = make('button', 'focus-class', '⇄ Referências de tipo (uses)');
@@ -721,6 +786,7 @@ function visibleGraph() {
   if (state.pathView) {
     return { nodes: state.pathView.nodes.map(id => state.nodes.get(id)).filter(Boolean), edges: state.pathView.edges, total: state.pathView.nodes.length };
   }
+  if (state.grouped && state.mode === 'all' && !$('#package-filter').value) return groupedGraph();
   // Inheritance and Intent edges live in separate payload arrays; the layer picks which ones are drawn.
   const inheritance = state.layer === 'intents' ? [] : state.project.edges;
   const intents = state.layer === 'inheritance' ? [] : (state.project.intentEdges || []);
@@ -746,7 +812,7 @@ function visibleGraph() {
     }
   } else {
     const pkg = $('#package-filter').value;
-    ids = new Set(state.project.nodes.filter(n => !n.external && matchesSurface(n) && matchesRole(n) && (!pkg || n.package === (pkg === '__default' ? '' : pkg))).map(n => n.id));
+    ids = new Set(state.project.nodes.filter(n => !n.external && !isHiddenLibrary(n) && matchesSurface(n) && matchesRole(n) && (!pkg || n.package === (pkg === '__default' ? '' : pkg))).map(n => n.id));
     const seeds = new Set(ids);
     for (const e of edges) if (seeds.has(e.source) && (state.nodes.get(e.target).external || pkg)) ids.add(e.target);
     if (state.selected && !pkg && ($('#show-external').checked || !state.nodes.get(state.selected).external)) ids.add(state.selected);
@@ -768,7 +834,9 @@ function surfaceClass(node) {
 }
 
 function nodeLabel(n) {
-  let name = n.name.length > 27 ? n.name.slice(0, 25) + '…' : n.name;
+  if (n.kind === 'package') return `${n.name.length > 27 ? '…' + n.name.slice(-25) : n.name}\n▣ ${n.count} classes${n.findings ? ` · ${n.findings} achados` : ''}`;
+  const shown = displayName(n);
+  let name = shown.length > 27 ? shown.slice(0, 25) + '…' : shown;
   const role = primaryRole(n);
   if (role && looksObfuscated(n.name)) name = `${name} (${role.label})`;
   if (n.external) return `${name}\n↗  ${n.resolution === 'external' ? 'externa' : 'não resolvida'}`;
@@ -784,6 +852,30 @@ function nodeLabel(n) {
     if (worst !== 'info') detail += ` · ${n.findings[worst]}×${worst}`;
   }
   return `${name}\n${detail}`;
+}
+
+// Aggregated package view: one node per package, edges summed; clicking a package expands it.
+function groupedGraph() {
+  const packages = new Map();
+  for (const node of state.project.nodes) {
+    if (node.external || isHiddenLibrary(node) || !matchesSurface(node) || !matchesRole(node)) continue;
+    const key = node.package || '(sem pacote)';
+    if (!packages.has(key)) packages.set(key, { id: `pkg:${key}`, name: key, kind: 'package', external: false, package: key, count: 0, findings: 0 });
+    const group = packages.get(key);
+    group.count += 1;
+    group.findings += node.findings ? (node.findings.high || 0) + (node.findings.medium || 0) : 0;
+  }
+  const counts = new Map();
+  const edges = [...state.project.edges, ...(state.layer === 'inheritance' ? [] : state.project.intentEdges || [])];
+  for (const edge of state.layer === 'intents' ? (state.project.intentEdges || []) : edges) {
+    const a = state.nodes.get(edge.source), b = state.nodes.get(edge.target);
+    if (!a || !b || a.external || b.external) continue;
+    const from = `pkg:${a.package || '(sem pacote)'}`, to = `pkg:${b.package || '(sem pacote)'}`;
+    if (from === to || !packages.has(a.package || '(sem pacote)') || !packages.has(b.package || '(sem pacote)')) continue;
+    counts.set(`${from}→${to}`, (counts.get(`${from}→${to}`) || 0) + 1);
+  }
+  const groupEdges = [...counts].map(([key, count], index) => { const [source, target] = key.split('→'); return { id: `g${index}`, source, target, kind: 'grouped', via: `${count}×`, line: '' }; });
+  return { nodes: [...packages.values()], edges: groupEdges, total: packages.size };
 }
 
 function graphElements(graph) {
@@ -1048,6 +1140,7 @@ function setup() {
       { selector: 'node.interface, node.annotation', style: { 'background-color': '#f4edfa', 'border-color': '#660099', 'color': '#660099' } },
       { selector: 'node.external', style: { 'background-color': '#e8e8e8', 'border-color': '#a0a0a0', 'border-style': 'dashed', 'color': '#595959' } },
       { selector: 'node.uncertain', style: { 'background-color': '#ffffdf', 'border-color': '#775500', 'color': '#775500' } },
+      { selector: 'node.package', style: { 'shape': 'round-rectangle', 'background-color': '#eef3fb', 'border-width': 2, 'border-style': 'double', 'border-color': '#204a87' } },
       { selector: 'node.exported', style: { 'border-style': 'double', 'border-width': 5, 'border-color': '#a00000' } },
       { selector: 'node.potential', style: { 'border-style': 'double', 'border-width': 5, 'border-color': '#775500' } },
       { selector: 'node:selected', style: { 'background-color': '#316ac5', 'border-color': '#204a87', 'border-width': 2, 'color': '#ffffff', 'font-weight': 'bold' } },
@@ -1059,14 +1152,18 @@ function setup() {
       { selector: 'edge.registers_receiver', style: { 'source-arrow-shape': 'circle', 'source-arrow-color': '#a05000' } },
       { selector: 'edge.implements', style: { 'line-color': '#660099', 'target-arrow-color': '#660099', 'line-style': 'dashed', 'color': '#660099' } },
     ] });
-  cy.on('tap', 'node', event => select(event.target.id()));
+  cy.on('tap', 'node', event => {
+    const id = event.target.id();
+    if (id.startsWith('pkg:')) { $('#package-filter').value = id.slice(4) === '(sem pacote)' ? '__default' : id.slice(4); renderGraph(); return; }
+    select(id);
+  });
   cy.on('dbltap', 'node', event => { select(event.target.id()); setMode('focus'); });
   cy.on('zoom', updateZoomControls);
   $('#graph').addEventListener('pointerdown', () => $('#graph').classList.add('is-panning'));
   window.addEventListener('pointerup', () => $('#graph').classList.remove('is-panning'));
   new ResizeObserver(() => cy.resize()).observe($('#graph'));
   let searchTimer;
-  $('#search').addEventListener('input', event => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.query = event.target.value.trim().toLowerCase(); state.listLimit = 200; renderList(); }, 120); });
+  $('#search').addEventListener('input', event => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.query = event.target.value.trim().toLowerCase(); state.listLimit = 200; renderList(); globalSearch(state.query); }, 250); });
   $$('[data-kind]').forEach(button => button.addEventListener('click', () => { state.kind = button.dataset.kind; $$('[data-kind]').forEach(b => b.classList.toggle('active', b === button)); renderList(); }));
   $('#mode-all').addEventListener('click', () => setMode('all'));
   $('#mode-focus').addEventListener('click', () => setMode('focus'));
@@ -1098,6 +1195,21 @@ function setup() {
   $('#compare-download').addEventListener('click', downloadDiff);
   $$('input[name="other-is"]').forEach(input => input.addEventListener('change', async () => { if (!$('#compare-download').disabled) { try { renderDiff(await api(`/api/diff?otherIs=${otherIs()}`)); } catch (error) { toast(error.message); } } }));
   $('#show-surface').addEventListener('click', () => setPanel('surface'));
+  try {
+    state.hideLibraries = localStorage.getItem('atlas.hideLibraries') === '1';
+    state.extraPrefixes = JSON.parse(localStorage.getItem('atlas.extraPrefixes') || '[]');
+  } catch { /* storage unavailable: defaults */ }
+  $('#hide-libraries').checked = state.hideLibraries;
+  $('#extra-prefixes').value = state.extraPrefixes.join(', ');
+  const librariesChanged = () => {
+    state.hideLibraries = $('#hide-libraries').checked;
+    state.extraPrefixes = $('#extra-prefixes').value.split(',').map(p => p.trim()).filter(Boolean).map(p => (p.endsWith('.') ? p : p + '.'));
+    try { localStorage.setItem('atlas.hideLibraries', state.hideLibraries ? '1' : '0'); localStorage.setItem('atlas.extraPrefixes', JSON.stringify(state.extraPrefixes)); } catch { /* ignore */ }
+    state.listLimit = 200; renderList(); renderGraph();
+  };
+  $('#hide-libraries').addEventListener('change', librariesChanged);
+  $('#extra-prefixes').addEventListener('change', librariesChanged);
+  $('#group-packages').addEventListener('change', event => { state.grouped = event.target.checked; renderGraph(); });
   $$('[data-layer]').forEach(button => button.addEventListener('click', () => setLayer(button.dataset.layer)));
   $('#show-findings').addEventListener('click', () => setPanel('findings'));
   $('#tab-findings').addEventListener('click', () => setPanel('findings'));
