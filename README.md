@@ -75,6 +75,14 @@ jadx-atlas diff app-v1/sources app-v2/sources --format md --out diff.md --fail-o
 
 Mostra o que mudou na superfície de ataque: componentes novos ou removidos, `exported` que passou de `false` para `true`, permissões, deep links, flags de `<application>`, candidatos a achado novos e removidos (a identidade não depende da linha) e mudanças na herança dos componentes. Classes ofuscadas renomeadas são pareadas só como **possível correspondência**. Com `--fail-on`, o código de saída é 2 quando a mudança aparece, o que serve para CI. Na interface, use **⇄ Comparar versões**.
 
+## Relatório
+
+```bash
+jadx-atlas export app/sources --format md --out relatorio.md --apk app.apk
+```
+
+Gera um esqueleto de writeup: rastreabilidade (versão da ferramenta, data, SHA-256 do Manifest e, com `--apk`, do APK), dados do app, superfície de ataque, candidatos por severidade com evidência, caminhos possíveis, metodologia e limitações, e seções para o analista preencher. `--format json` produz o índice completo no formato de [docs/schema/atlas-index.schema.json](docs/schema/atlas-index.schema.json). Segredos ficam mascarados (use `--include-secrets` com cuidado), e `--anonymize` troca pacote, classes e hosts por identificadores estáveis para compartilhar sem expor o alvo. O caminho absoluto da pasta nunca é exportado.
+
 ## Explorar
 
 - **Busca**: localiza pelo nome da classe, nome completo, pacote ou caminho do arquivo. Atalho `/`.
@@ -86,7 +94,7 @@ Mostra o que mudou na superfície de ataque: componentes novos ou removidos, `ex
 - **Filtros**: ligue/desligue `extends`, `implements` e referências externas.
 - **Inspecionar classe**: mostra declaração, pais, interfaces e quem estende/implementa diretamente. Clique nas relações para navegar; a seta de voltar recupera a seleção anterior.
 - **Código**: clique no nome do arquivo no painel para abrir o conteúdo completo, com números de linha e a declaração destacada. O código é somente para leitura.
-- **Exportar mapa**: salva todo o índice em JSON, incluindo relações, nomes, caminhos e avisos; não inclui o conteúdo completo dos arquivos.
+- **Exportar mapa / relatório**: salva o índice em JSON (formato documentado) ou o relatório em Markdown, opcionalmente anonimizados; não inclui o conteúdo completo dos arquivos nem o caminho absoluto da pasta.
 
 As setas saem da classe/interface filha e apontam para o tipo pai. Relações `implements` são tracejadas e roxas; relações `extends` são contínuas. Tipos externos têm borda tracejada; referências não resolvidas ficam em amarelo. Clicar em um tipo externo explica por que o código está indisponível.
 
