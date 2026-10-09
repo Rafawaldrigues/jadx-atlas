@@ -1,15 +1,15 @@
 ---
-name: Bug
-about: Algo não funciona como o README descreve
+name: Bug report
+about: Something does not work as the README describes
 labels: bug
 ---
 
-**O que aconteceu**
+**What happened**
 
-**O que você esperava**
+**What you expected**
 
-**Como reproduzir** (de preferência com código Java mínimo escrito por você; **não anexe código decompilado de terceiros nem APKs**)
+**How to reproduce** (ideally with minimal Java code you wrote yourself; **do not attach decompiled third-party code or APKs**)
 
-**Ambiente:** `jadx-atlas --version`, versão do JADX, sistema operacional, versão do Python.
+**Environment:** `jadx-atlas --version`, JADX version, operating system, Python version.
 
-> Falhas de segurança na própria ferramenta: não abra issue pública. Veja SECURITY.md.
+> Security problems in the tool itself: do not open a public issue. See SECURITY.md.

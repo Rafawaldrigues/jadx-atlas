@@ -1,19 +1,31 @@
-# Segurança
+# Security
 
-## Uso responsável
+## Responsible use
 
-O JADX Atlas é uma ferramenta de análise estática para aplicativos que **você está autorizado a analisar**: seus próprios apps, apps open source, apps feitos para ser vulneráveis (CTF, treinamento) ou alvos de programas de bug bounty, **dentro do escopo e das regras de cada programa**. Descompilar ou testar apps de terceiros sem autorização pode violar a lei, os termos de uso ou direitos autorais. Não publique código decompilado de terceiros.
+JADX Atlas is a static analysis tool for apps you are **authorised to analyse**: your own apps, open-source
+apps, deliberately vulnerable apps (CTF, training) or bug bounty targets **within each programme's scope
+and rules**. Decompiling or testing third-party apps without authorisation may break the law, terms of
+service or copyright. Do not publish decompiled third-party code.
 
-Os resultados do Atlas são **candidatos** para revisão manual, não veredictos. Uma relação, um papel ou um achado inferido pode estar errado. Cada item traz o nível de confiança e a evidência para você conferir.
+Atlas results are **candidates** for manual review, not verdicts. An inferred relation, role or finding can
+be wrong; each one carries its confidence and evidence so you can check it.
 
-## Modelo de ameaça da própria ferramenta
+## Threat model of the tool itself
 
-- Tudo roda localmente. O servidor escuta apenas em `127.0.0.1`, valida `Host` e `Origin` e não faz nenhuma chamada de rede durante a execução (sem telemetria e sem CDN).
-- O código exportado pelo JADX, o AndroidManifest e as strings do APK são tratados como **entrada hostil**: links simbólicos são ignorados, os arquivos têm tamanho limitado e o texto chega ao navegador apenas por `textContent`.
-- Limitação conhecida: outro processo ou outro usuário da mesma máquina que alcance a porta local pode usar a API. Um token de sessão está planejado. Evite rodar o Atlas em máquinas compartilhadas com pessoas não confiáveis.
+- Everything runs locally. The server only listens on `127.0.0.1`, validates `Host` and `Origin`, requires
+  a per-run session token on `/api/` routes, and makes no network calls at run time (no telemetry, no CDN).
+- Decompiled code, the AndroidManifest and APK strings are treated as **hostile input**: XML DTDs and
+  entities are refused, symbolic links are ignored, file sizes and XML depth are capped, and text reaches
+  the browser only through `textContent` under a strict Content Security Policy.
+- Analyst notes and the index cache are stored in your user data and cache directories, never inside the
+  analysed folder.
 
-## Como reportar uma vulnerabilidade no Atlas
+## Reporting a vulnerability in JADX Atlas
 
-Use o recurso **"Report a vulnerability"** (Private vulnerability reporting) na aba *Security* do repositório no GitHub. Não abra issue pública para falhas de segurança. Inclua a versão (`jadx-atlas --version`), os passos para reproduzir e, se possível, um arquivo de entrada mínimo que **não** contenha código de terceiros.
+Please use GitHub's **"Report a vulnerability"** (private vulnerability reporting) in the repository's
+*Security* tab. Do not open a public issue for security problems. Include the version
+(`jadx-atlas --version`), steps to reproduce and, if possible, a minimal input that does **not** contain
+third-party code.
 
-O mantenedor procura responder em até 14 dias. A correção sai antes da divulgação, e quem reportou recebe crédito, se quiser.
+The maintainer aims to reply within 14 days. Fixes are released before public disclosure, and reporters
+are credited if they wish.

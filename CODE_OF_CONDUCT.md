@@ -1,10 +1,13 @@
-# Código de conduta
+# Code of conduct
 
-Este projeto quer ser um espaço respeitoso para quem estuda e pratica segurança de aplicativos.
+This project wants to be a respectful place for people who study and practise application security.
 
-- Trate todas as pessoas com respeito, independentemente de experiência, origem ou identidade.
-- Critique ideias e código, não pessoas. Explique o porquê e, quando puder, sugira o caminho.
-- Não publique dados pessoais de terceiros, credenciais, código decompilado de terceiros ou detalhes de vulnerabilidades não corrigidas.
-- Discussões sobre ataques servem para defesa, pesquisa autorizada e ensino. Pedidos para atacar alvos sem autorização serão encerrados.
+- Treat everyone with respect, regardless of experience, background or identity.
+- Criticise ideas and code, not people. Explain why and, when you can, suggest a way forward.
+- Do not post third parties' personal data, credentials, decompiled third-party code or details of
+  unfixed vulnerabilities.
+- Discussions about attacks are for defence, authorised research and teaching. Requests to attack targets
+  without authorisation will be closed.
 
-Comportamentos inaceitáveis podem levar à remoção de comentários, issues ou contribuições. Para relatar um problema de conduta, use o contato de segurança descrito em `SECURITY.md`.
+Unacceptable behaviour may lead to the removal of comments, issues or contributions. To report a conduct
+problem, use the security contact described in [SECURITY.md](SECURITY.md).

@@ -1,90 +1,115 @@
-# Validação manual
+# Validation
 
-## Fase 1 · Superfície de ataque do AndroidManifest (2026-10-08)
+How the analysis results were checked against independent references. Automated versions of these
+checks live in `tests/test_jadx_integration.py` and run whenever `javac`, JADX and the Android SDK are
+available.
 
-**Alvo:** app sintético `tests/apk/testapp` (código deste projeto, sem questão de licença), construído com `python scripts/build_test_apk.py` (build-tools 36.0.0, android-37.0, javac `--release 11`, d8 `--min-api 21`). O APK não é assinado nem versionado. SHA-256 do build usado: `3460e77e1cbd467d4899ea20a281230dc9828e6c070d5865582cbe90f9b37809` (o hash muda a cada build, porque o zip guarda datas).
+## Test app
 
-**Exportação:** `jadx -d jadx-out atlas-testapp.apk` (JADX 1.5.6) → `jadx-out/resources/AndroidManifest.xml` e `jadx-out/resources/res/values/bools.xml`. Com `--no-res`, a pasta `resources/` fica vazia.
+`tests/apk/testapp` is a small synthetic app written for this project (no third-party code, no licensing
+question). `python scripts/build_test_apk.py` builds it with the Android SDK (build-tools 36.0.0,
+android-37.0, `javac --release 11`, d8 `--min-api 21`); `--obfuscate` runs R8 instead of d8. The APK is
+unsigned and never committed; its hash changes on every build because the zip stores timestamps.
 
-**Referência independente:** `aapt2 dump xmltree --file AndroidManifest.xml atlas-testapp.apk` lê o Manifest **binário** direto do APK, sem passar pelo JADX. A coluna "Esperado" aplica à saída do aapt2 as regras da plataforma (AOSP `ParsedActivityUtils`, `ParsedServiceUtils` e `ParsedProviderUtils`) com `targetSdkVersion=30`.
+It contains one component for every export rule branch, plus a deliberately vulnerable chain:
+`DeepLinkActivity` (exported through a deep link) → `PaymentActivity` (not exported) →
+`InsecureClient` (an anonymous `X509TrustManager` that accepts every certificate).
 
-| Componente (aapt2) | `exported` no binário | Filtros | Esperado | Atlas | Classe ligada |
+Exported with `jadx -d out atlas-testapp.apk` (JADX 1.5.6) → `out/resources/AndroidManifest.xml` and
+`out/resources/res/values/bools.xml`. With `--no-res`, `out/resources/` is empty.
+
+## Attack surface (AndroidManifest)
+
+**Independent reference:** `aapt2 dump xmltree --file AndroidManifest.xml atlas-testapp.apk` reads the
+**binary** manifest straight from the APK, without JADX. The "Expected" column applies the platform rules
+(AOSP `ParsedActivityUtils`, `ParsedServiceUtils`, `ParsedProviderUtils`) to the aapt2 output with
+`targetSdkVersion=30`.
+
+| Component (aapt2) | `exported` in the binary | Filters | Expected | Atlas | Class linked |
 |---|---|---|---|---|---|
-| activity `.MainActivity` | true | 1 | exportado | `true` (explícito) | ✓ |
-| activity `.DeepLinkActivity` | ausente | 2 (VIEW+BROWSABLE) | exportado implícito, 2 deep links | `true` (implícito por intent-filter), `https://atlas.example/open` (autoVerify) e `atlas:` | ✓ |
-| activity `.InternalActivity` | false | 0 | não exportado | `false` (explícito) | ✓ |
-| activity `ResourceActivity` | `@0x7f010000` (= `@bool/export_resource` = true) | 1 | exportado (resolve para true) | `unknown`, palpite `true` (`res/values/bools.xml`) | ✓ |
-| activity-alias `.AliasLauncher` → `.InternalActivity` | true | 0 | exportado, sem permissão herdada | `true`, classe `InternalActivity` | ✓ |
-| service `.SyncService` | true, permission SYNC | 0 | exportado com permissão `signature` | `true`, `signature` | ✓ |
-| service `.LocalService` | ausente | 0 | não exportado | `false` | ✓ |
-| receiver `.BootReceiver` | ausente | 1 | exportado implícito | `true` (implícito) | ✓ |
-| receiver `Outer$InnerReceiver` | true | 0 | exportado | `true`; o JADX escreve `Outer.InnerReceiver` | ✓ |
-| receiver `.MissingReceiver` | true | 0 | exportado; classe não compilada | `true`, `class: null`, com aviso | — (correto) |
-| provider `.DataProvider` | true, readPermission READ_DATA | 0 | exportado; **escrita sem permissão** | `true`, sem permissão efetiva (lado mais fraco) | ✓ |
-| provider `.LegacyProvider` | ausente | 0 | não exportado (targetSdk 30 ≥ 17) | `false` | ✓ |
+| activity `.MainActivity` | true | 1 | exported | `true` (explicit) | ✓ |
+| activity `.DeepLinkActivity` | missing | 2 (VIEW+BROWSABLE) | implicitly exported, 2 deep links | `true` (implicit through intent-filter), `https://atlas.example/open` (autoVerify) and `atlas:` | ✓ |
+| activity `.InternalActivity` | false | 0 | not exported | `false` (explicit) | ✓ |
+| activity `ResourceActivity` | `@0x7f010000` (= `@bool/export_resource` = true) | 1 | exported (resolves to true) | `unknown`, guess `true` (`res/values/bools.xml`) | ✓ |
+| activity-alias `.AliasLauncher` → `.InternalActivity` | true | 0 | exported, no inherited permission | `true`, class `InternalActivity` | ✓ |
+| activity `.PaymentActivity` | false | 0 | not exported | `false` (explicit) | ✓ |
+| service `.SyncService` | true, permission SYNC | 0 | exported, `signature` permission | `true`, `signature` | ✓ |
+| service `.LocalService` | missing | 0 | not exported | `false` | ✓ |
+| receiver `.BootReceiver` | missing | 1 | implicitly exported | `true` (implicit) | ✓ |
+| receiver `Outer$InnerReceiver` | true | 0 | exported | `true`; JADX writes `Outer.InnerReceiver` | ✓ |
+| receiver `.MissingReceiver` | true | 0 | exported; class not compiled | `true`, `class: null`, with a warning | — (correct) |
+| provider `.DataProvider` | true, readPermission READ_DATA | 0 | exported; **write side unprotected** | `true`, no effective permission (weakest side) | ✓ |
+| provider `.LegacyProvider` | missing | 0 | not exported (targetSdk 30 ≥ 17) | `false` | ✓ |
 
-**Resultado:** 12 de 12 componentes conferem. (Na Fase 5 o app ganhou um 13º componente, `PaymentActivity`, não exportado, para a cadeia plantada; o teste automático cobre os 13.) `exported=true` confirmados: 8; potencialmente exportados: 1 (`ResourceActivity`, valor real `true`, então o palpite estava certo). O teste `tests/test_jadx_integration.py::ApkManifestIntegrationTests` refaz esta conferência automaticamente quando javac, JADX e Android SDK estão disponíveis.
+**Result:** 13 of 13 components match. The one "potentially exported" component (`ResourceActivity`) has a
+real value of `true`, so the guess was right.
 
-**Divergências e observações:**
-- O aapt2 mostra nomes relativos (`.MainActivity`), e o JADX os expande (`br.atlas.testapp.MainActivity`), exceto em `activity-alias`, onde o nome e o `targetActivity` continuam relativos. O Atlas normaliza os dois casos.
-- No binário, `exported` de `ResourceActivity` é um id de recurso (`@0x7f010000`). O JADX o converte de volta para `@bool/export_resource`. Por isso o Atlas consegue dar um palpite, mas não afirma o valor: outra configuração (`values-v31` etc.) poderia mudá-lo.
-- MobSF não foi usado. O aapt2 lê o mesmo binário que o instalador do Android lê.
+**Notes:**
+- aapt2 shows relative names (`.MainActivity`); JADX expands them (`br.atlas.testapp.MainActivity`) except
+  for `activity-alias`, whose name and `targetActivity` stay relative. Atlas normalises both.
+- In the binary, `ResourceActivity`'s `exported` is a resource id. JADX turns it back into
+  `@bool/export_resource`, which is why Atlas can offer a guess without asserting the value: another
+  configuration (`values-v31`, …) could change it.
 
-**Limitação desta validação:** o app é sintético e pequeno. A conferência em um app real de terceiros (open source ou de CTF) fica pendente.
+## Roles from inheritance
 
-## Fase 2 · Papéis por herança (2026-10-08)
-
-**Mesmo APK sintético e mesma exportação da Fase 1.**
-
-| Critério | Resultado |
+| Criterion | Result |
 |---|---|
-| Todas as activities do Manifest (4 activities + 1 alias → `InternalActivity`) têm papel `activity` | 5/5, confiança `high` (`roleCheck`) |
-| Nenhuma classe sem ancestral de Activity recebe o papel | 0 classes extras |
-| Services, receivers, providers e Application | 2, 2 (incluindo `Outer.InnerReceiver`), 2 e 1, todos com `high` |
+| Every manifest activity (5 activities + 1 alias → `InternalActivity`) gets the `activity` role | 6/6, `high` confidence (`roleCheck`) |
+| No class without an Activity ancestor gets the role | 0 extra classes |
+| Services, receivers, providers and Application | 2, 2 (including `Outer.InnerReceiver`), 2 and 1, all `high` |
 
-**Demonstração (AndroidX):** `CheckoutActivity → BaseActivity → AppCompatActivity → FragmentActivity → androidx.activity.ComponentActivity → androidx.core.app.ComponentActivity → Activity` (alta). `BaseActivity` (abstrata, não declarada) é marcada como `undeclaredComponent`, só como informação.
+Demo (AndroidX): `CheckoutActivity → BaseActivity → AppCompatActivity → FragmentActivity →
+androidx.activity.ComponentActivity → androidx.core.app.ComponentActivity → Activity` (high).
+`BaseActivity` (abstract, not declared) is flagged as `undeclaredComponent`, as information only.
 
-**Conferência da tabela:** `python scripts/framework_hierarchy.py --check` → "framework_hierarchy.json confere com javap" (76 tipos, 13 fontes).
+Framework table: `python scripts/framework_hierarchy.py --check` → both data files match
+`android.jar`/`javap` (76 types from 13 sources; 102 `java.lang` types).
 
-A conferência automática fica em `tests/test_jadx_integration.py::ApkManifestIntegrationTests`. Os casos sintéticos (ofuscação, ciclos, ambiguidade, coincidência de nome curto) ficam em `tests/test_roles.py`.
+## Finding candidates on real code
 
-## Fase 3 · Uso de APIs sensíveis (2026-10-08)
+`tests/test_rules.py` has a positive and a negative case for **each** of the 30 rules, plus confidence,
+context, shadowing, anonymous-class, syntax-error and scaling cases.
 
-**Testes de regra:** `tests/test_rules.py` tem um caso positivo e um negativo para **cada** uma das 30 regras (o negativo inclui receptores de outro tipo, argumentos seguros e placeholders), além de casos de confiança, contexto, sombreamento, classes anônimas, arquivo com erro de sintaxe e custo.
+Real code with no planted vulnerability: AndroidX appcompat 1.7.0, core 1.13.1, fragment 1.8.5,
+activity 1.9.3, firebase-messaging 24.1.0 and support library 28.0.0, decompiled with JADX 1.5.6
+(887 files, 2,032 types).
 
-**Código real (sem vulnerabilidade plantada):** AndroidX appcompat 1.7.0, core 1.13.1, fragment 1.8.5, activity 1.9.3, firebase-messaging 24.1.0 e support 28.0.0 (appcompat-v7, support-compat), decompilados com JADX 1.5.6: 887 arquivos, 2.032 tipos.
-
-| Regra | Achados | Revisão manual |
+| Rule | Findings | Manual review |
 |---|---|---|
-| exec-reflection (info) | 175 | Esperado em bibliotecas (compatibilidade por reflexão). |
-| pendingintent-mutable | 11 | 2 com `high` em `SearchView` (`FLAG_ONE_SHOT` sem `FLAG_IMMUTABLE`, candidatos reais em targetSdk < 31); 9 com `low` (flags vindas de variável ou helper, como `addMutabilityFlags`). |
-| broadcast-without-permission (info) | 2 | `ShortcutManagerCompat`: broadcast com Intent explícito construído antes (falso positivo documentado). |
-| crypto-weak-hash | 1 | `GmsRpc`: SHA-1 para derivar identificador (uso não criptográfico, falso positivo documentado). |
+| exec-reflection (info) | 175 | Expected in libraries (reflection for backwards compatibility). |
+| pendingintent-mutable | 11 | 2 `high` in `SearchView` (`FLAG_ONE_SHOT` without `FLAG_IMMUTABLE`: real candidates for targetSdk < 31); 9 `low` (flags from a variable or a helper such as `addMutabilityFlags`). |
+| broadcast-without-permission (info) | 2 | `ShortcutManagerCompat`: explicit Intent built earlier (documented false positive). |
+| crypto-weak-hash | 1 | `GmsRpc`: SHA-1 used to derive an identifier (non-cryptographic use, documented false positive). |
 
-Antes dos ajustes da D-016, a mesma base gerava 3 falsos positivos de criptografia (`getInstance(...)` implícito em `FirebaseMessaging`) e 9 de entropia (strings `@Metadata` do Kotlin). Os dois casos ganharam testes de regressão.
+Before tuning, the same code produced 3 crypto false positives (an implicit `getInstance(...)` call in
+`FirebaseMessaging`) and 9 entropy false positives (Kotlin `@Metadata` strings). Both now have
+regression tests.
 
-**Desempenho:** 1,0 s sem regras contra 1,44 a 1,56 s com regras (+45 a 55%) nesses 2.032 tipos; detalhes em docs/PERFORMANCE.md.
+## Possible paths
 
-## Fase 5 · Caminhos da entrada até o ponto sensível (2026-10-09)
-
-**Alvo:** o mesmo app sintético, agora com a cadeia plantada da D-022. SHA-256 do build: `9ffbde85b678e6fa9f1f54d9691b1624fe20a35dc67793bd8141d0ed17f0541a`. Exportado com JADX 1.5.6.
-
-**Resultado do Atlas** (aba Caminhos, entrada `DeepLinkActivity`, alvo padrão):
+Atlas result (Paths tab, entry `DeepLinkActivity`, default targets):
 
 ```
-Caminho 1 → br.atlas.testapp.InsecureClient (confiança high, 2 passos)
+Path 1 → br.atlas.testapp.InsecureClient (confidence high, 2 steps)
   DeepLinkActivity --launches (startActivity)--> PaymentActivity   [br/atlas/testapp/DeepLinkActivity.java:15]
-  PaymentActivity --uses (referência de tipo)--> InsecureClient    [br/atlas/testapp/PaymentActivity.java:10]
+  PaymentActivity --uses (type reference)--> InsecureClient        [br/atlas/testapp/PaymentActivity.java:10]
 ```
 
-O achado `tls-trustmanager-accepts-all` (high, `inAnonymous: true`) fica em `InsecureClient`, e as 9 entradas padrão vêm do Manifest.
+The `tls-trustmanager-accepts-all` finding (high, `inAnonymous: true`) is attributed to
+`InsecureClient`. With R8 (`--obfuscate`), R8 inlines `InsecureClient` into `PaymentActivity` and the
+TrustManager becomes class `a.a`; Atlas still finds `DeepLinkActivity → PaymentActivity → a.a`.
 
-**Comparação com a busca manual no JADX** (contagem de ações de navegação, não tempo medido com usuários):
+**Compared with manual navigation in the JADX GUI** (navigation actions counted, not timed with users):
 
-| Abordagem | Ações até ligar entrada exposta → ponto vulnerável |
+| Approach | Actions to connect the exposed entry to the vulnerable code |
 |---|---|
-| JADX GUI, partindo do problema | 1) buscar `checkServerTrusted`; 2) abrir `InsecureClient`; 3) "find usage" de `InsecureClient`; 4) abrir `PaymentActivity`; 5) "find usage" de `PaymentActivity`; 6) abrir `DeepLinkActivity`; 7) abrir o `AndroidManifest.xml` e confirmar que ela é exportada e tem deep link (e que `PaymentActivity` não é). **7 ações**, e isso só depois de saber o que procurar. |
-| JADX GUI, partindo das entradas | Abrir o Manifest e percorrer cada uma das 9 entradas expostas até achar o TrustManager: dezenas de ações. |
-| JADX Atlas | 1) aba Caminhos; 2) buscar com a entrada sugerida (ou percorrer as entradas no seletor); 3) clicar nos passos para ver a evidência. **3 ações**, e o achado já aparece no painel Achados sem que se saiba o que procurar. |
+| JADX GUI, starting from the problem | 1) search `checkServerTrusted`; 2) open `InsecureClient`; 3) find usages of `InsecureClient`; 4) open `PaymentActivity`; 5) find usages of `PaymentActivity`; 6) open `DeepLinkActivity`; 7) open `AndroidManifest.xml` to confirm it is exported with a deep link (and that `PaymentActivity` is not). **7 actions**, and only once you know what to look for. |
+| JADX GUI, starting from the entries | Open the manifest and walk each of the 9 exposed entries until the TrustManager shows up: dozens of actions. |
+| JADX Atlas | 1) Paths tab; 2) search from the suggested entry (or go through the entries); 3) click the steps to see the evidence. **3 actions**, and the finding is already listed in the Findings panel without knowing what to look for. |
 
-**Limitações honestas:** a cadeia foi plantada por mim, num app pequeno. Em apps reais, as arestas `uses` dão muitos caminhos plausíveis mas irrelevantes (o limite de expansões e a ordenação reduzem, mas não eliminam). Falta a validação com um app de CTF.
+## Limitations of this validation
+
+- The test app is small and the vulnerable chain was planted on purpose. On real apps, `uses` edges
+  produce many plausible but irrelevant paths; the expansion limit and ordering reduce, but do not remove, them.
+- Validation on a real third-party app (an open-source app or a CTF app whose licence allows it) is still pending.

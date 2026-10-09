@@ -1,11 +1,11 @@
 ---
-name: Pedido de recurso
-about: Uma ideia para o Atlas (nova regra, papel, visualização...)
+name: Feature request
+about: An idea for Atlas (new rule, role, view...)
 labels: enhancement
 ---
 
-**Qual problema isso resolve?**
+**What problem does it solve?**
 
-**Proposta** (para regras novas: API alvo, caso positivo, caso negativo e falsos positivos conhecidos)
+**Proposal** (for new rules: target API, a positive case, a negative case and known false positives)
 
-**Referências** (documentação oficial ou OWASP MASTG, com link conferido)
+**References** (official documentation or OWASP MASTG, with a checked link)

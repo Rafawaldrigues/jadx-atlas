@@ -1,15 +1,16 @@
-# Contribuindo
+# Contributing
 
-Obrigado pelo interesse! Algumas regras do projeto (veja também `docs/DECISIONS.md`):
+Thanks for your interest! A few project rules (see [docs/DESIGN.md](docs/DESIGN.md) for the reasoning):
 
-1. **Honestidade de resolução:** nunca una classes pelo nome curto; todo fato inferido carrega confiança e evidência.
-2. **Achados são candidatos:** toda regra nova vem com caso positivo, caso negativo, falsos positivos conhecidos e referências conferidas.
-3. **100% local:** nada de chamadas de rede em tempo de execução, telemetria ou CDN. A CSP continua estrita.
-4. **Entrada hostil:** código, Manifest e strings do APK não são confiáveis. No navegador, só `textContent`.
-5. **Dependências mínimas:** qualquer dependência nova precisa de justificativa em `docs/DECISIONS.md`.
-6. **Licenças:** não copie código de projetos GPL. Não inclua APKs nem código decompilado de terceiros.
+1. **Honest resolution:** never join classes by short name; every inferred fact carries a confidence and evidence.
+2. **Findings are candidates:** every new rule comes with a positive case, a negative case, known false
+   positives and verified official references.
+3. **Local only:** no network calls at run time, no telemetry, no CDN. The CSP stays strict.
+4. **Hostile input:** code, the manifest and APK strings are untrusted. In the browser, use `textContent` only.
+5. **Minimal dependencies:** a new dependency needs a written justification in `docs/DESIGN.md`.
+6. **Licences:** do not copy code from GPL projects. Do not add APKs or decompiled third-party code.
 
-## Ambiente
+## Setup
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
@@ -19,8 +20,12 @@ ruff check . && ruff format --check .
 npm run check
 ```
 
-O teste ponta a ponta com APK roda quando `javac`, `jadx` e o Android SDK estão disponíveis. Use `python scripts/build_test_apk.py [--obfuscate]` para gerar o APK de teste.
+The end-to-end APK test runs when `javac`, `jadx` and the Android SDK are available. Use
+`python scripts/build_test_apk.py [--obfuscate]` to build the test APK. If you change the Markdown report,
+regenerate the golden file with `ATLAS_UPDATE_GOLDEN=1 python -m unittest tests.test_report` and review the diff.
 
 ## Commits
 
-Pequenos, um por tarefa lógica, no formato `tipo(escopo): descrição` (por exemplo `feat(manifest): parse exported components`). Atualize o `CHANGELOG.md` na seção "Não lançado".
+Small commits, one logical change each, formatted as `type(scope): description`
+(for example `feat(manifest): parse exported components`). Add a line to the *Unreleased* section of
+`CHANGELOG.md`.

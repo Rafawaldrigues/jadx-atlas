@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Rafawaldrigues/JADX-maping/docs/schema/atlas-index.schema.json",
+  "$id": "https://github.com/Rafawaldrigues/jadx-atlas/blob/main/docs/schema/atlas-index.schema.json",
   "title": "JADX Atlas index / report (schemaVersion 6)",
   "description": "Output of `jadx-atlas export --format json` and of the UI 'Exportar mapa'. Additive changes only; `schemaVersion` increases when fields are added. The absolute import path is never exported.",
   "type": "object",
