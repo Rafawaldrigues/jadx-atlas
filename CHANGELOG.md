@@ -5,6 +5,12 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Plain desktop look for the UI (Swing Metal palette, square corners, no shadows or animations, titled
+  borders); the graph uses white boxes with black outlines and hollow inheritance arrows.
+- Cytoscape.js 3.34.3 and cytoscape-dagre 4.0.1, which bundles dagre (the standalone `dagre.min.js` is gone).
+- `tree-sitter` stays below 0.26: 0.26.0 crashes in the query engine on real JADX output.
+
 ## [0.2.0] - 2026-10-09
 
 First public release: from a class-hierarchy viewer to an attack-surface map for Android apps.

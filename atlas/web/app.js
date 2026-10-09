@@ -304,7 +304,7 @@ function renderDetails() {
   if (node.abstract) badges.append(make('span', 'neutral', 'abstract'));
   if (node.readsIntent) badges.append(make('span', 'neutral', 'reads Intent'));
   if (node.deepLinkHandler) badges.append(make('span', 'neutral', 'deep link'));
-  if (node.component) badges.append(make('span', `surface ${surfaceClass(node)}`, node.component.exported === true ? 'EXPORTED' : isPotential(node.component) ? 'EXPORTED?' : node.component.type));
+  if (node.component) badges.append(make('span', `surface ${surfaceClass(node)}`, node.component.exported === true ? 'exported' : isPotential(node.component) ? 'exported?' : node.component.type));
   top.append(badges, make('h2', '', node.name), make('p', 'qualified-name', node.id.startsWith('?') ? node.declaration : node.id));
   if (node.path) {
     const source = make('button', 'source-link');
@@ -345,13 +345,13 @@ function renderDetails() {
   const classAncestors = ancestry.filter(entry => !['interface', 'annotation'].includes(state.nodes.get(entry.id)?.kind));
   const interfaces = ancestry.filter(entry => ['interface', 'annotation'].includes(state.nodes.get(entry.id)?.kind));
   root.append(
-    relationSection('EXTENDS', outgoing.filter(e => e.kind === 'extends'), 'target'),
-    relationSection('IMPLEMENTS', outgoing.filter(e => e.kind === 'implements'), 'target'),
-    ancestrySection('FULL CLASS CHAIN', classAncestors),
-    ancestrySection('DIRECT AND INHERITED INTERFACES', interfaces),
-    relationSection('EXTENDED BY', incoming.filter(e => e.kind === 'extends'), 'source'),
+    relationSection('Extends', outgoing.filter(e => e.kind === 'extends'), 'target'),
+    relationSection('Implements', outgoing.filter(e => e.kind === 'implements'), 'target'),
+    ancestrySection('Full class chain', classAncestors),
+    ancestrySection('Direct and inherited interfaces', interfaces),
+    relationSection('Extended by', incoming.filter(e => e.kind === 'extends'), 'source'),
   );
-  if (node.kind === 'interface' || incoming.some(e => e.kind === 'implements')) root.append(relationSection('IMPLEMENTED BY', incoming.filter(e => e.kind === 'implements'), 'source'));
+  if (node.kind === 'interface' || incoming.some(e => e.kind === 'implements')) root.append(relationSection('Implemented by', incoming.filter(e => e.kind === 'implements'), 'source'));
 }
 
 function definition(list, term, value) {
@@ -362,7 +362,7 @@ function definition(list, term, value) {
 function rolesSection(node) {
   const section = make('section', 'relations-section roles-section');
   const title = make('div', 'relations-title');
-  title.append(make('span', '', 'ROLES INFERRED FROM INHERITANCE'), make('small', '', node.roles.length));
+  title.append(make('span', '', 'Roles inferred from inheritance'), make('small', '', node.roles.length));
   section.append(title);
   for (const role of node.roles) {
     const row = make('div', `role-row confidence-${role.confidence}`);
@@ -389,7 +389,7 @@ function componentSection(node) {
   const component = node.component;
   const section = make('section', 'relations-section component-section');
   const title = make('div', 'relations-title');
-  title.append(make('span', '', 'ANDROID COMPONENT (CANDIDATE)'), make('small', '', component.type));
+  title.append(make('span', '', 'Android component (candidate)'), make('small', '', component.type));
   section.append(title);
   section.append(make('p', `exposure-line ${surfaceClass(node)}`, exposureLabel(component)));
   const list = make('dl', 'component-facts');
@@ -405,7 +405,7 @@ function componentSection(node) {
   definition(list, 'intent-filters', component.intentFilters.length);
   section.append(list);
   if (component.deepLinks.length) {
-    section.append(make('div', 'relations-title', 'DEEP LINKS'));
+    section.append(make('div', 'relations-title', 'Deep links'));
     for (const link of component.deepLinks) section.append(make('code', 'deep-link', `${link.uri}${link.autoVerify ? '  (autoVerify)' : ''}`));
   }
   for (const filter of component.intentFilters.slice(0, 20)) {
@@ -445,14 +445,14 @@ function renderSurface() {
   const alerts = appAlerts(manifest);
   const box = make('section', 'relations-section app-alerts');
   const title = make('div', 'relations-title');
-  title.append(make('span', '', 'APP ALERTS (CANDIDATES)'), make('small', '', alerts.length));
+  title.append(make('span', '', 'App alerts (candidates)'), make('small', '', alerts.length));
   box.append(title);
   if (!alerts.length) box.append(make('p', 'relations-empty', 'No alert in the <application> attributes.'));
   for (const alert of alerts) box.append(make('p', 'alert-item', alert));
   root.append(box);
   const list = make('section', 'relations-section');
   const listTitle = make('div', 'relations-title');
-  listTitle.append(make('span', '', 'COMPONENTS BY EXPOSURE'), make('small', '', manifest.components.length));
+  listTitle.append(make('span', '', 'Components by exposure'), make('small', '', manifest.components.length));
   list.append(listTitle);
   for (const component of manifest.components) {
     const button = make('button', `relation-button surface-row ${component.exported === true ? 'exported' : isPotential(component) ? 'potential' : ''}`);
@@ -522,7 +522,7 @@ async function searchPaths(event) {
 function pathCard(path, index, entry) {
   const card = make('section', `path-card confidence-${path.confidence}`);
   const head = make('div', 'relations-title');
-  head.append(make('span', '', `PATH ${index + 1} → ${path.target.split('.').pop()}`), make('small', '', `${path.length} step(s) · ${path.confidence}`));
+  head.append(make('span', '', `Path ${index + 1} → ${path.target.split('.').pop()}`), make('small', '', `${path.length} step(s) · ${path.confidence}`));
   card.append(head);
   const show = make('button', 'focus-class', '◎ Highlight on the map');
   show.addEventListener('click', () => showPath(entry, path));
@@ -587,7 +587,7 @@ function annotationSection(node) {
   const saved = state.annotations[node.id] || { alias: '', tags: [], note: '' };
   const section = make('details', 'relations-section annotation-section');
   section.open = Boolean(saved.alias || saved.tags.length || saved.note);
-  section.append(make('summary', 'relations-title', 'ANALYST NOTES (STORED OUTSIDE THE ANALYSED FOLDER)'));
+  section.append(make('summary', 'relations-title', 'Analyst notes (stored outside the analysed folder)'));
   const alias = make('input'); alias.value = saved.alias; alias.placeholder = 'alias (e.g. LoginActivity)'; alias.maxLength = 80;
   const tags = make('input'); tags.value = saved.tags.join(', '); tags.placeholder = 'comma-separated tags';
   const note = make('textarea'); note.value = saved.note; note.placeholder = 'note'; note.maxLength = 2000; note.rows = 3;
@@ -613,7 +613,7 @@ async function globalSearch(query) {
   try {
     const result = await api(`/api/search?q=${encodeURIComponent(query)}&limit=30`);
     if ($('#search').value.trim().toLowerCase() !== query) return;
-    root.replaceChildren(make('div', 'relations-title', `GLOBAL SEARCH · ${result.total}`));
+    root.replaceChildren(make('div', 'relations-title', `Global search · ${result.total}`));
     for (const item of result.results) {
       const row = make('button', 'relation-button global-row');
       const text = make('span');
@@ -643,7 +643,7 @@ function usesSection(node) {
         row.addEventListener('click', () => select(item.id));
         return row;
       });
-      button.replaceWith(make('div', 'relations-title', `USES (${uses.out.length}) · USED BY (${uses.in.length})${uses.truncated ? ' · list truncated' : ''}`), ...list(uses.out, '→'), ...list(uses.in, '←'));
+      button.replaceWith(make('div', 'relations-title', `Uses (${uses.out.length}) · used by (${uses.in.length})${uses.truncated ? ' · list truncated' : ''}`), ...list(uses.out, '→'), ...list(uses.in, '←'));
     } catch (error) { toast(error.message); button.disabled = false; }
   });
   section.append(button);
@@ -654,7 +654,7 @@ function intentsSection(node) {
   const section = make('section', 'relations-section intents-section');
   const title = make('div', 'relations-title');
   const out = state.intentOut.get(node.id) || [], incoming = state.intentIn.get(node.id) || [];
-  title.append(make('span', '', 'INTENTS (FLOW WITHIN THE METHOD)'), make('small', '', out.length + incoming.length));
+  title.append(make('span', '', 'Intents (flow within the method)'), make('small', '', out.length + incoming.length));
   section.append(title);
   const row = (edge, other, arrow) => {
     const target = state.nodes.get(other);
@@ -671,7 +671,7 @@ function intentsSection(node) {
   for (const edge of incoming) section.append(row(edge, edge.source, '←'));
   const unresolved = node.intents?.unresolved || [];
   if (unresolved.length) {
-    section.append(make('div', 'relations-title', `UNRESOLVED (${node.intents.unresolvedTotal})`));
+    section.append(make('div', 'relations-title', `Unresolved (${node.intents.unresolvedTotal})`));
     for (const item of unresolved.slice(0, 20)) section.append(make('p', 'relations-empty', `L${item.line} ${item.via}: ${item.reason}${item.action ? ` — ${item.action}` : ''}${item.text ? ` — ${item.text}` : ''}`));
   }
   return section;
@@ -681,7 +681,7 @@ function findingsSection(node) {
   const findings = state.project.findings.filter(f => f.classId === node.id);
   const section = make('section', 'relations-section findings-section');
   const title = make('div', 'relations-title');
-  title.append(make('span', '', 'FINDING CANDIDATES IN THIS CLASS'), make('small', '', findings.length));
+  title.append(make('span', '', 'Finding candidates in this class'), make('small', '', findings.length));
   section.append(title);
   for (const finding of findings.slice(0, 50)) section.append(findingButton(finding, false));
   return section;
@@ -826,7 +826,7 @@ function renderGraph() {
   const limited = graph.total > LIMIT;
   $('#graph-status').textContent = limited ? `Showing ${LIMIT} of ${graph.total.toLocaleString('en-US')}. Use focus or filter by package.` :
     state.fullHierarchy ? 'Full hierarchy · arrows point to the parent type' : 'Arrows point to the parent type';
-  $('#graph-status').style.color = limited ? '#775500' : '';
+  $('#graph-status').style.color = limited ? '#806000' : '';
 }
 
 function setMode(mode) {
@@ -987,17 +987,17 @@ function renderDiff(result) {
     for (const item of items) list.append(render(item));
     root.append(list);
   };
-  section('MANIFEST', result.manifest, item => {
+  section('Manifest', result.manifest, item => {
     const name = item.name || item.field || '';
     const change = item.kind === 'component-added' ? `${item.type}, exported=${item.exported}`
       : item.uri || ('old' in item ? `${JSON.stringify(item.old)} → ${JSON.stringify(item.new)}` : '');
     return make('li', item.highlight ? 'highlight' : '', `${DIFF_LABELS[item.kind] || item.kind}${item.highlight ? ' (false → true)' : ''}: ${name} ${change}`);
   });
   const finding = f => make('li', `severity-${f.severity}`, `${f.severity} (${f.confidence}) · ${ruleOf(f.ruleId).title} · ${f.classId}:${f.line} · ${f.snippet}`);
-  section('NEW FINDING CANDIDATES', result.findingsAdded, finding);
-  section('REMOVED FINDING CANDIDATES', result.findingsRemoved, finding);
-  section('COMPONENT INHERITANCE', result.hierarchy, item => make('li', '', `${item.name}: ${item.old.map(i => i.split('.').pop()).join(' → ')} ⇒ ${item.new.map(i => i.split('.').pop()).join(' → ')}`));
-  section('POSSIBLE MATCHES (NOT PROOF OF EQUIVALENCE)', result.renames, item => make('li', '', `${item.old} → ${item.new} · confidence ${item.confidence} · ${item.reason}`));
+  section('New finding candidates', result.findingsAdded, finding);
+  section('Removed finding candidates', result.findingsRemoved, finding);
+  section('Component inheritance', result.hierarchy, item => make('li', '', `${item.name}: ${item.old.map(i => i.split('.').pop()).join(' → ')} ⇒ ${item.new.map(i => i.split('.').pop()).join(' → ')}`));
+  section('Possible matches (not proof of equivalence)', result.renames, item => make('li', '', `${item.old} → ${item.new} · confidence ${item.confidence} · ${item.reason}`));
 }
 
 async function downloadDiff() {
@@ -1051,22 +1051,22 @@ function setup() {
     boxSelectionEnabled: false, autoungrabify: true, panningEnabled: true, userPanningEnabled: true,
     zoomingEnabled: true, userZoomingEnabled: true,
     style: [
-      { selector: 'node', style: { 'shape': 'rectangle', 'width': 194, 'height': 62, 'background-color': '#ffffff', 'border-color': '#204a87', 'border-width': 1.3,
-        'label': 'data(label)', 'text-wrap': 'wrap', 'text-valign': 'center', 'text-halign': 'center', 'color': '#202020', 'font-family': 'DejaVu Sans Mono, Consolas, monospace', 'font-size': 11, 'line-height': 1.8, 'text-max-width': 180, 'overlay-opacity': 0 } },
-      { selector: 'node.interface, node.annotation', style: { 'background-color': '#f4edfa', 'border-color': '#660099', 'color': '#660099' } },
-      { selector: 'node.external', style: { 'background-color': '#e8e8e8', 'border-color': '#a0a0a0', 'border-style': 'dashed', 'color': '#595959' } },
-      { selector: 'node.uncertain', style: { 'background-color': '#ffffdf', 'border-color': '#775500', 'color': '#775500' } },
-      { selector: 'node.package', style: { 'shape': 'round-rectangle', 'background-color': '#eef3fb', 'border-width': 2, 'border-style': 'double', 'border-color': '#204a87' } },
+      { selector: 'node', style: { 'shape': 'rectangle', 'width': 194, 'height': 58, 'background-color': '#ffffff', 'border-color': '#000000', 'border-width': 1,
+        'label': 'data(label)', 'text-wrap': 'wrap', 'text-valign': 'center', 'text-halign': 'center', 'color': '#000000', 'font-family': 'DejaVu Sans Mono, Liberation Mono, monospace', 'font-size': 11, 'line-height': 1.5, 'text-max-width': 180, 'overlay-opacity': 0 } },
+      { selector: 'node.interface, node.annotation', style: { 'font-style': 'italic', 'color': '#660099', 'border-color': '#660099' } },
+      { selector: 'node.external', style: { 'background-color': '#eeeeee', 'border-color': '#555555', 'border-style': 'dashed', 'color': '#555555' } },
+      { selector: 'node.uncertain', style: { 'background-color': '#ffffe1', 'border-style': 'dotted', 'color': '#806000' } },
+      { selector: 'node.package', style: { 'background-color': '#eeeeee', 'border-width': 3, 'border-style': 'double', 'border-color': '#000000', 'font-weight': 'bold' } },
       { selector: 'node.exported', style: { 'border-style': 'double', 'border-width': 5, 'border-color': '#a00000' } },
-      { selector: 'node.potential', style: { 'border-style': 'double', 'border-width': 5, 'border-color': '#775500' } },
-      { selector: 'node:selected', style: { 'background-color': '#316ac5', 'border-color': '#204a87', 'border-width': 2, 'color': '#ffffff', 'font-weight': 'bold' } },
-      { selector: 'edge', style: { 'curve-style': 'bezier', 'width': 1.4, 'line-color': '#204a87', 'target-arrow-color': '#204a87', 'target-arrow-shape': 'triangle', 'arrow-scale': 0.8,
-        'label': 'data(label)', 'font-size': 9, 'font-family': 'Consolas, monospace', 'color': '#204a87', 'text-background-color': '#ffffff', 'text-background-opacity': 1, 'text-background-padding': 4, 'text-rotation': 'autorotate', 'text-margin-y': -1, 'overlay-opacity': 0 } },
-      { selector: 'edge.path', style: { 'line-color': '#a00000', 'target-arrow-color': '#a00000', 'target-arrow-shape': 'triangle-backcurve', 'width': 3, 'line-style': 'solid', 'color': '#a00000' } },
-      { selector: 'edge.intent', style: { 'line-color': '#a05000', 'target-arrow-color': '#a05000', 'target-arrow-shape': 'vee', 'line-style': 'dashed', 'line-dash-pattern': [8, 4], 'color': '#a05000', 'width': 1.8 } },
+      { selector: 'node.potential', style: { 'border-style': 'dashed', 'border-width': 3, 'border-color': '#806000' } },
+      { selector: 'node:selected', style: { 'background-color': '#b8cfe5', 'border-width': 2, 'font-weight': 'bold' } },
+      { selector: 'edge', style: { 'curve-style': 'bezier', 'width': 1, 'line-color': '#000000', 'target-arrow-color': '#000000', 'target-arrow-shape': 'triangle', 'target-arrow-fill': 'hollow', 'arrow-scale': 1.1,
+        'label': 'data(label)', 'font-size': 10, 'font-family': 'DejaVu Sans, sans-serif', 'color': '#000000', 'text-background-color': '#ffffff', 'text-background-opacity': 1, 'text-background-padding': 2, 'text-rotation': 'autorotate', 'overlay-opacity': 0 } },
+      { selector: 'edge.implements', style: { 'line-color': '#660099', 'target-arrow-color': '#660099', 'line-style': 'dashed', 'line-dash-pattern': [6, 3], 'color': '#660099' } },
+      { selector: 'edge.intent', style: { 'line-color': '#a05000', 'target-arrow-color': '#a05000', 'target-arrow-shape': 'vee', 'target-arrow-fill': 'filled', 'line-style': 'dashed', 'line-dash-pattern': [8, 4], 'color': '#a05000', 'width': 1.5 } },
       { selector: 'edge.sends_action', style: { 'line-style': 'dotted', 'line-dash-pattern': [2, 4] } },
       { selector: 'edge.registers_receiver', style: { 'source-arrow-shape': 'circle', 'source-arrow-color': '#a05000' } },
-      { selector: 'edge.implements', style: { 'line-color': '#660099', 'target-arrow-color': '#660099', 'line-style': 'dashed', 'color': '#660099' } },
+      { selector: 'edge.path', style: { 'line-color': '#a00000', 'target-arrow-color': '#a00000', 'target-arrow-shape': 'triangle', 'target-arrow-fill': 'filled', 'width': 3, 'line-style': 'solid', 'color': '#a00000' } },
     ] });
   cy.on('tap', 'node', event => {
     const id = event.target.id();

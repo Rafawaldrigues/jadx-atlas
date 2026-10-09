@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#E8E8E8">
+  <meta name="theme-color" content="#EEEEEE">
   <title>JADX Atlas — Attack-surface map</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
@@ -14,20 +14,20 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/" aria-label="JADX Atlas, home"><img src="icon.svg" alt=""><span>JADX <strong>ATLAS</strong><small>CODE EXPLORER</small></span></a>
+    <a class="brand" href="/" aria-label="JADX Atlas, home"><img src="icon.svg" alt=""><span>JADX Atlas</span></a>
     <div class="project-heading">
-      <span class="folder-icon">▱</span><span id="project-name">Loading project…</span><span id="demo-badge" class="badge">DEMO</span>
+      <span class="project-label">Project:</span><span id="project-name">Loading project…</span><span id="demo-badge" class="badge">DEMO</span>
     </div>
     <div class="header-actions">
-      <span class="local-status"><i></i> Local only</span>
-      <button id="open-compare" class="subtle" title="Compare the attack surface with another version of the app">⇄ Compare versions</button>
-      <button id="open-project" class="primary"><span>＋</span> Open project</button>
+      <span class="local-status">Local only</span>
+      <button id="open-compare" class="subtle" title="Compare the attack surface with another version of the app">Compare versions…</button>
+      <button id="open-project" class="primary">Open project…</button>
     </div>
   </header>
 
   <div class="workspace">
     <aside class="sidebar" aria-label="Class explorer">
-      <div class="sidebar-heading"><span>EXPLORER</span><span id="file-count" class="dim"></span></div>
+      <div class="sidebar-heading"><span>Explorer</span><span id="file-count" class="dim"></span></div>
       <label class="search-box">
         <span aria-hidden="true">⌕</span>
         <input id="search" type="search" placeholder="Search class or package…" aria-label="Search class or package" autocomplete="off"><kbd>/</kbd>
@@ -55,16 +55,16 @@
       </fieldset>
       <div class="list-caption"><span>Packages and declarations</span><span id="search-count"></span></div>
       <div id="class-list" class="class-list"></div>
-      <div class="sidebar-footer"><span class="local-lock">◇</span><div>Your code stays on this machine.<small>Local reading · nothing is uploaded</small></div></div>
+      <div class="sidebar-footer">Your code stays on this machine. Nothing is uploaded.</div>
     </aside>
 
     <main>
       <div class="main-heading">
-        <div><div class="eyebrow">PROJECT <span>/</span> STRUCTURE</div><h1>Class map<span class="heading-dot">.</span></h1><p>From the big picture down to the line of code.</p></div>
+        <h1>Class map</h1>
         <div class="export-actions">
           <label class="anonymize" title="Replace package, class names and hosts with stable identifiers"><input id="export-anonymize" type="checkbox"> anonymize</label>
-          <button id="export-graph" class="subtle" title="Export the full index as JSON (without the folder's absolute path)">↓ Export map</button>
-          <button id="export-report" class="subtle" title="Markdown report to turn into a write-up">↓ Export report</button>
+          <button id="export-graph" class="subtle" title="Export the full index as JSON (without the folder's absolute path)">Export map…</button>
+          <button id="export-report" class="subtle" title="Markdown report to turn into a write-up">Export report…</button>
         </div>
       </div>
       <div class="metrics">
@@ -97,10 +97,10 @@
           <label><input id="show-implements" type="checkbox" checked><span class="legend-line purple"></span> implements</label>
           <label><input id="show-external" type="checkbox" checked> External references</label>
           <span class="legend-intents" id="legend-intents" hidden><span class="legend-line intent"></span> launches <span class="legend-line action"></span> sends_action <span class="legend-line register"></span> registers_receiver (arrow → target)</span>
-          <span class="legend-surface" id="legend-surface" hidden><span class="legend-box exported"></span> exported <span class="legend-box potential"></span> potentially</span>
+          <span class="legend-surface" id="legend-surface" hidden><span class="legend-box exported"></span> exported <span class="legend-box potential"></span> potentially exported</span>
         </div>
         <div id="graph" tabindex="0" aria-label="Interactive graph. Drag the background to move, use the wheel to zoom and the arrow keys to navigate."></div>
-        <div id="graph-empty" class="graph-empty" hidden><span>⌕</span><strong>No class in this view</strong><p>Adjust the filters or select another class.</p><button id="empty-reset" class="primary">Reset filters</button></div>
+        <div id="graph-empty" class="graph-empty" hidden><strong>No class in this view</strong><p>Adjust the filters or select another class.</p><button id="empty-reset" class="primary">Reset filters</button></div>
         <div class="graph-controls" aria-label="Map controls">
           <div class="pan-pad" aria-label="Move map">
             <button id="pan-up" aria-label="Move up" title="Move up (↑)">↑</button><button id="pan-left" aria-label="Move left" title="Move left (←)">←</button>
@@ -123,10 +123,10 @@
     <aside class="inspector" aria-label="Details of the selected class">
       <div class="inspector-top">
         <div class="inspector-tabs" role="tablist" aria-label="Side panel">
-          <button id="tab-class" role="tab" aria-selected="true" aria-controls="details" class="active">CLASS</button>
-          <button id="tab-surface" role="tab" aria-selected="false" aria-controls="surface" hidden>SURFACE</button>
-          <button id="tab-findings" role="tab" aria-selected="false" aria-controls="findings" hidden>FINDINGS</button>
-          <button id="tab-paths" role="tab" aria-selected="false" aria-controls="paths" hidden>PATHS</button>
+          <button id="tab-class" role="tab" aria-selected="true" aria-controls="details" class="active">Class</button>
+          <button id="tab-surface" role="tab" aria-selected="false" aria-controls="surface" hidden>Surface</button>
+          <button id="tab-findings" role="tab" aria-selected="false" aria-controls="findings" hidden>Findings</button>
+          <button id="tab-paths" role="tab" aria-selected="false" aria-controls="paths" hidden>Paths</button>
         </div>
         <button id="back" class="icon-button" aria-label="Back to the previous class" title="Back to the previous class" disabled>←</button>
       </div>
@@ -156,8 +156,8 @@
 
   <dialog id="import-dialog">
     <form id="import-form">
-      <div class="dialog-heading"><div class="eyebrow">NEW PROJECT</div><button type="button" class="icon-button close-dialog" aria-label="Close">×</button></div>
-      <h2>Explore your code.</h2>
+      <div class="dialog-heading"><div class="eyebrow">Open project</div><button type="button" class="icon-button close-dialog" aria-label="Close">×</button></div>
+      <h2>Open a JADX export</h2>
       <p>Provide the folder of <code>.java</code> files exported by JADX. Subfolders are read automatically.</p>
       <label class="field-label" for="project-path">Folder path</label>
       <input id="project-path" class="path-input" placeholder="/home/user/decompiled-app/sources" required autocomplete="off">
@@ -170,13 +170,13 @@
         <progress id="progress-bar" max="100" value="0"></progress>
         <button type="button" id="cancel-import" class="subtle">Cancel import</button>
       </div>
-      <div class="dialog-actions"><button type="button" id="load-demo" class="subtle">Open demo</button><button type="submit" id="submit-import" class="primary">Analyse folder <span>→</span></button></div>
+      <div class="dialog-actions"><button type="button" id="load-demo" class="subtle">Open demo</button><button type="submit" id="submit-import" class="primary">Analyse folder</button></div>
     </form>
   </dialog>
 
   <dialog id="source-dialog" class="source-dialog">
     <div class="source-heading">
-      <div><div class="eyebrow">EXPORTED SOURCE CODE</div><h2 id="source-title"></h2><p id="source-path"></p></div>
+      <div><div class="eyebrow">Source code</div><h2 id="source-title"></h2><p id="source-path"></p></div>
       <div class="source-actions"><button id="jump-declaration" class="subtle">Go to declaration</button><button id="copy-source" class="subtle">Copy code</button><button class="icon-button close-dialog" aria-label="Close code">×</button></div>
     </div>
     <div id="source-finding" class="source-finding" hidden></div>
@@ -185,7 +185,7 @@
   </dialog>
 
   <dialog id="warnings-dialog">
-    <div class="dialog-heading"><div class="eyebrow">ANALYSIS QUALITY</div><button class="icon-button close-dialog" aria-label="Close warnings">×</button></div>
+    <div class="dialog-heading"><div class="eyebrow">Analysis warnings</div><button class="icon-button close-dialog" aria-label="Close warnings">×</button></div>
     <h2>Import warnings</h2>
     <p>Uncertain references stay marked on the map.</p>
     <div id="warnings-list"></div>
@@ -193,8 +193,8 @@
 
   <dialog id="compare-dialog" class="compare-dialog">
     <form id="compare-form">
-      <div class="dialog-heading"><div class="eyebrow">VERSION DIFF</div><button type="button" class="icon-button close-dialog" aria-label="Close">×</button></div>
-      <h2>Compare with another version.</h2>
+      <div class="dialog-heading"><div class="eyebrow">Compare versions</div><button type="button" class="icon-button close-dialog" aria-label="Close">×</button></div>
+      <h2>Compare with another version</h2>
       <p>Provide the JADX export of another version of the same app. The open project stays loaded.</p>
       <label class="field-label" for="compare-path">Folder of the other version</label>
       <input id="compare-path" class="path-input" required autocomplete="off" placeholder="/home/user/app-v2/sources">
@@ -205,7 +205,7 @@
       </fieldset>
       <div id="compare-error" class="error-box" role="alert" hidden></div>
       <p id="compare-progress" class="relations-empty" aria-live="polite" hidden></p>
-      <div class="dialog-actions"><button type="button" id="compare-download" class="subtle" disabled>↓ Report .md</button><button type="submit" id="compare-submit" class="primary">Compare <span>→</span></button></div>
+      <div class="dialog-actions"><button type="button" id="compare-download" class="subtle" disabled>Save report (.md)…</button><button type="submit" id="compare-submit" class="primary">Compare</button></div>
     </form>
     <div id="compare-result" class="compare-result"></div>
   </dialog>
