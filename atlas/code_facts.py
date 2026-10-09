@@ -33,7 +33,7 @@ MAX_SEARCH_STRINGS = 60
 _QUERIES = {}
 
 # Phase 5 "uses": object creation, static calls and the declared type of locals/fields.
-# Parameters, return types and casts are left out on purpose (volume; see docs/DECISIONS.md D-020).
+# Parameters, return types and casts are left out on purpose (volume; see docs/DESIGN.md, "Intents and paths").
 TYPE_REFERENCE_QUERY = """
 (object_creation_expression type: (_) @type)
 (local_variable_declaration type: (_) @type)

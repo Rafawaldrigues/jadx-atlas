@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#E8E8E8">
-  <title>JADX Atlas — Mapa de classes</title>
+  <title>JADX Atlas — Attack-surface map</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="theme.css">
   <link id="__________cytoscape_stylesheet" rel="stylesheet" href="cytoscape.css">
   <script src="vendor/cytoscape.min.js" defer></script>
   <script src="vendor/dagre.min.js" defer></script>
@@ -15,60 +15,201 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/" aria-label="JADX Atlas, início"><img src="icon.svg" alt=""><span>JADX <strong>ATLAS</strong><small>CODE EXPLORER</small></span></a>
-    <div class="project-heading"><span class="folder-icon">▱</span><span id="project-name">Carregando projeto…</span><span id="demo-badge" class="badge">DEMO</span></div>
-    <div class="header-actions"><span class="local-status"><i></i> Ambiente local</span><button id="open-compare" class="subtle" title="Comparar a superfície de ataque com outra versão do app">⇄ Comparar versões</button><button id="open-project" class="primary"><span>＋</span> Abrir projeto</button></div>
+    <a class="brand" href="/" aria-label="JADX Atlas, home"><img src="icon.svg" alt=""><span>JADX <strong>ATLAS</strong><small>CODE EXPLORER</small></span></a>
+    <div class="project-heading">
+      <span class="folder-icon">▱</span><span id="project-name">Loading project…</span><span id="demo-badge" class="badge">DEMO</span>
+    </div>
+    <div class="header-actions">
+      <span class="local-status"><i></i> Local only</span>
+      <button id="open-compare" class="subtle" title="Compare the attack surface with another version of the app">⇄ Compare versions</button>
+      <button id="open-project" class="primary"><span>＋</span> Open project</button>
+    </div>
   </header>
 
   <div class="workspace">
-    <aside class="sidebar" aria-label="Explorador de classes">
-      <div class="sidebar-heading"><span>EXPLORADOR</span><span id="file-count" class="dim"></span></div>
-      <label class="search-box"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Buscar classe ou pacote…" aria-label="Buscar classe ou pacote" autocomplete="off"><kbd>/</kbd></label>
-      <div class="list-tabs" role="group" aria-label="Filtrar tipos"><button class="active" data-kind="all">Todos</button><button data-kind="class">Classes</button><button data-kind="interface">Interfaces</button></div>
-      <div class="library-filter"><label title="Esconde pacotes de bibliotecas conhecidas (atlas/data/libraries.json). O pacote do app nunca é escondido."><input id="hide-libraries" type="checkbox"> Ocultar bibliotecas</label><input id="extra-prefixes" placeholder="prefixos extras: com.sdk., io.ads." aria-label="Prefixos extras de bibliotecas, separados por vírgula" autocomplete="off"></div>
+    <aside class="sidebar" aria-label="Class explorer">
+      <div class="sidebar-heading"><span>EXPLORER</span><span id="file-count" class="dim"></span></div>
+      <label class="search-box">
+        <span aria-hidden="true">⌕</span>
+        <input id="search" type="search" placeholder="Search class or package…" aria-label="Search class or package" autocomplete="off"><kbd>/</kbd>
+      </label>
+      <div class="list-tabs" role="group" aria-label="Filter kinds">
+        <button class="active" data-kind="all">All</button><button data-kind="class">Classes</button><button data-kind="interface">Interfaces</button>
+      </div>
+      <div class="library-filter">
+        <label title="Hides packages of known libraries (atlas/data/libraries.json). The app's own package is never hidden."><input id="hide-libraries" type="checkbox"> Hide libraries</label>
+        <input id="extra-prefixes" placeholder="extra prefixes: com.sdk., io.ads." aria-label="Extra library prefixes, comma separated" autocomplete="off">
+      </div>
       <div id="global-search" class="global-search" hidden aria-live="polite"></div>
-      <label id="role-filter" class="role-filter" hidden>Papel <select id="filter-role" aria-label="Filtrar por papel inferido"><option value="">Todos os papéis</option></select></label>
-      <fieldset id="surface-filters" class="surface-filters" hidden><legend>Superfície de ataque</legend><label><input id="filter-exported" type="checkbox"> Exportado <small>(inclui potenciais)</small></label><label><input id="filter-deeplink" type="checkbox"> Deep link</label><label><input id="filter-noperm" type="checkbox"> Sem permissão</label><label class="surface-type">Tipo <select id="filter-component-type" aria-label="Tipo de componente"><option value="">Todos</option><option value="activity">activity</option><option value="activity-alias">activity-alias</option><option value="service">service</option><option value="receiver">receiver</option><option value="provider">provider</option></select></label></fieldset>
-      <div class="list-caption"><span>Pacotes e declarações</span><span id="search-count"></span></div>
+      <label id="role-filter" class="role-filter" hidden>Role <select id="filter-role" aria-label="Filter by inferred role"><option value="">All roles</option></select></label>
+      <fieldset id="surface-filters" class="surface-filters" hidden>
+        <legend>Attack surface</legend>
+        <label><input id="filter-exported" type="checkbox"> Exported <small>(includes potential)</small></label>
+        <label><input id="filter-deeplink" type="checkbox"> Deep link</label>
+        <label><input id="filter-noperm" type="checkbox"> No permission</label>
+        <label class="surface-type">Type
+          <select id="filter-component-type" aria-label="Component type">
+            <option value="">All</option><option value="activity">activity</option><option value="activity-alias">activity-alias</option>
+            <option value="service">service</option><option value="receiver">receiver</option><option value="provider">provider</option>
+          </select>
+        </label>
+      </fieldset>
+      <div class="list-caption"><span>Packages and declarations</span><span id="search-count"></span></div>
       <div id="class-list" class="class-list"></div>
-      <div class="sidebar-footer"><span class="local-lock">◇</span><div>O código fica nesta máquina.<small>Leitura local · sem envio para a nuvem</small></div></div>
+      <div class="sidebar-footer"><span class="local-lock">◇</span><div>Your code stays on this machine.<small>Local reading · nothing is uploaded</small></div></div>
     </aside>
 
     <main>
-      <div class="main-heading"><div><div class="eyebrow">PROJETO <span>/</span> ESTRUTURA</div><h1>Mapa de classes<span class="heading-dot">.</span></h1><p>Da visão geral até a linha de código.</p></div><div class="export-actions"><label class="anonymize" title="Trocar pacote, classes e hosts por identificadores estáveis"><input id="export-anonymize" type="checkbox"> anonimizar</label><button id="export-graph" class="subtle" title="Exportar o índice completo em JSON (sem o caminho absoluto da pasta)">↓ Exportar mapa</button><button id="export-report" class="subtle" title="Relatório em Markdown para virar writeup">↓ Exportar relatório</button></div></div>
-      <div class="metrics"><div><strong id="stat-types">—</strong><span>declarações</span></div><div><strong id="stat-relations">—</strong><span>relações</span></div><div><strong id="stat-packages">—</strong><span>pacotes</span></div><button id="show-findings" class="metric-findings" title="Abrir a lista de candidatos a achado" hidden><strong id="stat-findings">—</strong><span>achados ↗</span></button><button id="show-surface" class="metric-surface" title="Abrir a lista de componentes do AndroidManifest"><strong id="stat-exported">—</strong><span>exportados ↗</span></button><button id="show-warnings" class="metric-warning"><strong id="stat-warnings">—</strong><span>avisos de análise ↗</span></button></div>
-      <div id="surface-banner" class="surface-banner" role="note" hidden></div>
-      <section class="graph-shell" aria-label="Mapa interativo de herança">
-        <div class="graph-toolbar"><div class="segmented" role="group" aria-label="Modo do mapa"><button id="mode-all" class="active">Visão geral</button><button id="mode-focus">Foco na classe</button></div><div class="segmented layers" role="group" aria-label="Camadas de arestas"><button id="layer-inheritance" class="active" data-layer="inheritance">Herança</button><button id="layer-intents" data-layer="intents">Intents</button><button id="layer-all" data-layer="all">Todas</button></div><label class="package-filter"><span class="sr-only">Filtrar mapa por pacote</span><select id="package-filter"><option value="">Todos os pacotes</option></select></label><label class="group-toggle" title="Mostrar um nó por pacote; clique no pacote para expandir"><input id="group-packages" type="checkbox"> Agrupar pacotes</label><button id="reset-filters" class="icon-button" title="Redefinir filtros" aria-label="Redefinir filtros">↺</button></div>
-        <div id="focus-controls" class="focus-controls" hidden><select id="direction" aria-label="Direção das relações"><option value="both">Ambos os sentidos</option><option value="parents">Ancestrais</option><option value="children">Descendentes</option></select><label>Profundidade <select id="depth" aria-label="Profundidade"><option selected>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label><button id="expand-depth" class="subtle">＋ Expandir</button><button id="full-hierarchy" class="subtle" title="Mostrar todos os ancestrais e interfaces da classe selecionada">↑ Herança completa</button></div>
-        <div class="graph-legend"><label><input id="show-extends" type="checkbox" checked><span class="legend-line"></span> extends</label><label><input id="show-implements" type="checkbox" checked><span class="legend-line purple"></span> implements</label><label><input id="show-external" type="checkbox" checked> Referências externas</label><span class="legend-intents" id="legend-intents" hidden><span class="legend-line intent"></span> launches <span class="legend-line action"></span> sends_action <span class="legend-line register"></span> registers_receiver (seta → destino)</span><span class="legend-surface" id="legend-surface" hidden><span class="legend-box exported"></span> exportado <span class="legend-box potential"></span> potencialmente</span></div>
-        <div id="graph" tabindex="0" aria-label="Grafo interativo. Arraste o fundo para mover, use a roda para zoom e as setas do teclado para navegar."></div>
-        <div id="graph-empty" class="graph-empty" hidden><span>⌕</span><strong>Nenhuma classe nesta visualização</strong><p>Ajuste os filtros ou selecione outra classe.</p><button id="empty-reset" class="primary">Redefinir filtros</button></div>
-        <div class="graph-controls" aria-label="Controles do mapa">
-          <div class="pan-pad" aria-label="Mover mapa"><button id="pan-up" aria-label="Mover para cima" title="Mover para cima (↑)">↑</button><button id="pan-left" aria-label="Mover para esquerda" title="Mover para esquerda (←)">←</button><button id="center-selected" aria-label="Centralizar classe selecionada" title="Centralizar classe selecionada (C)">◎</button><button id="pan-right" aria-label="Mover para direita" title="Mover para direita (→)">→</button><button id="pan-down" aria-label="Mover para baixo" title="Mover para baixo (↓)">↓</button></div>
-          <div class="zoom-strip"><button id="zoom-out" aria-label="Diminuir zoom" title="Diminuir zoom (-)">−</button><input id="zoom-range" type="range" min="4" max="250" value="100" aria-label="Nível de zoom"><output id="zoom-value" for="zoom-range">100%</output><button id="zoom-in" aria-label="Aumentar zoom" title="Aumentar zoom (+)">＋</button></div>
-          <div class="view-actions"><button id="fit" aria-label="Ajustar mapa à tela" title="Ajustar tudo à tela (0)">⛶</button><button id="layout" aria-label="Reorganizar mapa" title="Reorganizar mapa">↻</button></div>
+      <div class="main-heading">
+        <div><div class="eyebrow">PROJECT <span>/</span> STRUCTURE</div><h1>Class map<span class="heading-dot">.</span></h1><p>From the big picture down to the line of code.</p></div>
+        <div class="export-actions">
+          <label class="anonymize" title="Replace package, class names and hosts with stable identifiers"><input id="export-anonymize" type="checkbox"> anonymize</label>
+          <button id="export-graph" class="subtle" title="Export the full index as JSON (without the folder's absolute path)">↓ Export map</button>
+          <button id="export-report" class="subtle" title="Markdown report to turn into a write-up">↓ Export report</button>
         </div>
-        <div class="graph-tip">Arraste o fundo para mover <span>·</span> Roda para zoom <span>·</span> Duplo clique para focar <span>·</span> Tecla H mostra toda a herança</div>
-        <div class="graph-footer"><span><i class="status-dot"></i><span id="visible-count">Preparando mapa…</span></span><span id="graph-status">Setas apontam para o tipo pai</span></div>
+      </div>
+      <div class="metrics">
+        <div><strong id="stat-types">—</strong><span>declarations</span></div>
+        <div><strong id="stat-relations">—</strong><span>relations</span></div>
+        <div><strong id="stat-packages">—</strong><span>packages</span></div>
+        <button id="show-findings" class="metric-findings" title="Open the list of finding candidates" hidden><strong id="stat-findings">—</strong><span>findings ↗</span></button>
+        <button id="show-surface" class="metric-surface" title="Open the list of AndroidManifest components"><strong id="stat-exported">—</strong><span>exported ↗</span></button>
+        <button id="show-warnings" class="metric-warning"><strong id="stat-warnings">—</strong><span>analysis warnings ↗</span></button>
+      </div>
+      <div id="surface-banner" class="surface-banner" role="note" hidden></div>
+      <section class="graph-shell" aria-label="Interactive inheritance map">
+        <div class="graph-toolbar">
+          <div class="segmented" role="group" aria-label="Map mode"><button id="mode-all" class="active">Overview</button><button id="mode-focus">Class focus</button></div>
+          <div class="segmented layers" role="group" aria-label="Edge layers">
+            <button id="layer-inheritance" class="active" data-layer="inheritance">Inheritance</button><button id="layer-intents" data-layer="intents">Intents</button><button id="layer-all" data-layer="all">All</button>
+          </div>
+          <label class="package-filter"><span class="sr-only">Filter map by package</span><select id="package-filter"><option value="">All packages</option></select></label>
+          <label class="group-toggle" title="Show one node per package; click a package to expand it"><input id="group-packages" type="checkbox"> Group packages</label>
+          <button id="reset-filters" class="icon-button" title="Reset filters" aria-label="Reset filters">↺</button>
+        </div>
+        <div id="focus-controls" class="focus-controls" hidden>
+          <select id="direction" aria-label="Relation direction"><option value="both">Both directions</option><option value="parents">Ancestors</option><option value="children">Descendants</option></select>
+          <label>Depth <select id="depth" aria-label="Depth"><option selected>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
+          <button id="expand-depth" class="subtle">＋ Expand</button>
+          <button id="full-hierarchy" class="subtle" title="Show every ancestor and interface of the selected class">↑ Full hierarchy</button>
+        </div>
+        <div class="graph-legend">
+          <label><input id="show-extends" type="checkbox" checked><span class="legend-line"></span> extends</label>
+          <label><input id="show-implements" type="checkbox" checked><span class="legend-line purple"></span> implements</label>
+          <label><input id="show-external" type="checkbox" checked> External references</label>
+          <span class="legend-intents" id="legend-intents" hidden><span class="legend-line intent"></span> launches <span class="legend-line action"></span> sends_action <span class="legend-line register"></span> registers_receiver (arrow → target)</span>
+          <span class="legend-surface" id="legend-surface" hidden><span class="legend-box exported"></span> exported <span class="legend-box potential"></span> potentially</span>
+        </div>
+        <div id="graph" tabindex="0" aria-label="Interactive graph. Drag the background to move, use the wheel to zoom and the arrow keys to navigate."></div>
+        <div id="graph-empty" class="graph-empty" hidden><span>⌕</span><strong>No class in this view</strong><p>Adjust the filters or select another class.</p><button id="empty-reset" class="primary">Reset filters</button></div>
+        <div class="graph-controls" aria-label="Map controls">
+          <div class="pan-pad" aria-label="Move map">
+            <button id="pan-up" aria-label="Move up" title="Move up (↑)">↑</button><button id="pan-left" aria-label="Move left" title="Move left (←)">←</button>
+            <button id="center-selected" aria-label="Center selected class" title="Center selected class (C)">◎</button>
+            <button id="pan-right" aria-label="Move right" title="Move right (→)">→</button><button id="pan-down" aria-label="Move down" title="Move down (↓)">↓</button>
+          </div>
+          <div class="zoom-strip">
+            <button id="zoom-out" aria-label="Zoom out" title="Zoom out (-)">−</button>
+            <input id="zoom-range" type="range" min="4" max="250" value="100" aria-label="Zoom level"><output id="zoom-value" for="zoom-range">100%</output>
+            <button id="zoom-in" aria-label="Zoom in" title="Zoom in (+)">＋</button>
+          </div>
+          <div class="view-actions"><button id="fit" aria-label="Fit map to screen" title="Fit everything (0)">⛶</button><button id="layout" aria-label="Re-layout map" title="Re-layout map">↻</button></div>
+        </div>
+        <div class="graph-tip">Drag the background to move <span>·</span> Wheel to zoom <span>·</span> Double-click to focus <span>·</span> H shows the full hierarchy</div>
+        <div class="graph-footer"><span><i class="status-dot"></i><span id="visible-count">Preparing map…</span></span><span id="graph-status">Arrows point to the parent type</span></div>
       </section>
-      <div class="bottom-note"><span id="analysis-info">Analisando estrutura…</span><span>Classes <i class="square green"></i> Interfaces <i class="square purple"></i> Externas <i class="square grey"></i></span></div>
+      <div class="bottom-note"><span id="analysis-info">Analysing structure…</span><span>Classes <i class="square green"></i> Interfaces <i class="square purple"></i> External <i class="square grey"></i></span></div>
     </main>
 
-    <aside class="inspector" aria-label="Detalhes da classe selecionada">
-      <div class="inspector-top"><div class="inspector-tabs" role="tablist" aria-label="Painel lateral"><button id="tab-class" role="tab" aria-selected="true" aria-controls="details" class="active">CLASSE</button><button id="tab-surface" role="tab" aria-selected="false" aria-controls="surface" hidden>SUPERFÍCIE</button><button id="tab-findings" role="tab" aria-selected="false" aria-controls="findings" hidden>ACHADOS</button><button id="tab-paths" role="tab" aria-selected="false" aria-controls="paths" hidden>CAMINHOS</button></div><button id="back" class="icon-button" aria-label="Voltar à classe anterior" title="Voltar à classe anterior" disabled>←</button></div>
-      <div id="details" class="details" role="tabpanel" aria-labelledby="tab-class"><div class="empty-details">Selecione uma classe no mapa ou no explorador.</div></div>
+    <aside class="inspector" aria-label="Details of the selected class">
+      <div class="inspector-top">
+        <div class="inspector-tabs" role="tablist" aria-label="Side panel">
+          <button id="tab-class" role="tab" aria-selected="true" aria-controls="details" class="active">CLASS</button>
+          <button id="tab-surface" role="tab" aria-selected="false" aria-controls="surface" hidden>SURFACE</button>
+          <button id="tab-findings" role="tab" aria-selected="false" aria-controls="findings" hidden>FINDINGS</button>
+          <button id="tab-paths" role="tab" aria-selected="false" aria-controls="paths" hidden>PATHS</button>
+        </div>
+        <button id="back" class="icon-button" aria-label="Back to the previous class" title="Back to the previous class" disabled>←</button>
+      </div>
+      <div id="details" class="details" role="tabpanel" aria-labelledby="tab-class"><div class="empty-details">Select a class on the map or in the explorer.</div></div>
       <div id="surface" class="details surface-panel" role="tabpanel" aria-labelledby="tab-surface" hidden></div>
-      <div id="paths" class="details paths-panel" role="tabpanel" aria-labelledby="tab-paths" hidden><p class="relations-empty">Caminho possível da entrada até uma classe com candidato a achado. Não é prova de alcançabilidade nem de exploração: não há análise de fluxo de dados.</p><form id="paths-form" class="paths-form"><label>Entrada <select id="path-entry" required></select></label><label>Alvo <select id="path-target"><option value="">classes com achado ≥ medium</option></select></label><label>Profundidade <select id="path-depth"><option>3</option><option>4</option><option>5</option><option selected>6</option><option>8</option><option>10</option></select></label><label class="inline"><input id="path-inheritance" type="checkbox" checked> subir por <code>extends</code></label><button type="submit" class="primary">Buscar caminhos</button></form><div id="paths-result" aria-live="polite"></div></div>
-      <div id="findings" class="details findings-panel" role="tabpanel" aria-labelledby="tab-findings" hidden><div class="findings-filters"><label>Severidade <select id="filter-severity"><option value="">todas</option><option value="high">high</option><option value="medium">≥ medium</option><option value="low">≥ low</option></select></label><label>Categoria <select id="filter-category"><option value="">todas</option></select></label><label>Confiança <select id="filter-confidence"><option value="">todas</option><option value="high">high</option><option value="medium">≥ medium</option></select></label></div><div id="findings-list"></div></div>
+      <div id="paths" class="details paths-panel" role="tabpanel" aria-labelledby="tab-paths" hidden>
+        <p class="relations-empty">Possible path from an entry point to a class with a finding candidate. Not proof of reachability or exploitability: there is no data-flow analysis.</p>
+        <form id="paths-form" class="paths-form">
+          <label>Entry <select id="path-entry" required></select></label>
+          <label>Target <select id="path-target"><option value="">classes with findings ≥ medium</option></select></label>
+          <label>Depth <select id="path-depth"><option>3</option><option>4</option><option>5</option><option selected>6</option><option>8</option><option>10</option></select></label>
+          <label class="inline"><input id="path-inheritance" type="checkbox" checked> walk up through <code>extends</code></label>
+          <button type="submit" class="primary">Find paths</button>
+        </form>
+        <div id="paths-result" aria-live="polite"></div>
+      </div>
+      <div id="findings" class="details findings-panel" role="tabpanel" aria-labelledby="tab-findings" hidden>
+        <div class="findings-filters">
+          <label>Severity <select id="filter-severity"><option value="">all</option><option value="high">high</option><option value="medium">≥ medium</option><option value="low">≥ low</option></select></label>
+          <label>Category <select id="filter-category"><option value="">all</option></select></label>
+          <label>Confidence <select id="filter-confidence"><option value="">all</option><option value="high">high</option><option value="medium">≥ medium</option></select></label>
+        </div>
+        <div id="findings-list"></div>
+      </div>
     </aside>
   </div>
 
-  <dialog id="import-dialog"><form id="import-form"><div class="dialog-heading"><div class="eyebrow">NOVO PROJETO</div><button type="button" class="icon-button close-dialog" aria-label="Fechar">×</button></div><h2>Explore seu código.</h2><p>Informe a pasta de arquivos <code>.java</code> exportada pelo JADX. As subpastas serão lidas automaticamente.</p><label class="field-label" for="project-path">Caminho da pasta</label><input id="project-path" class="path-input" placeholder="/home/usuario/app-descompilado/sources" required autocomplete="off"><label class="field-label" for="manifest-path">AndroidManifest.xml <small>(opcional; por padrão é procurado em <code>resources/</code> ao lado de <code>sources</code>)</small></label><input id="manifest-path" class="path-input" placeholder="/home/usuario/app-descompilado/resources/AndroidManifest.xml" autocomplete="off"><div class="import-hint">No JADX: <strong>Salvar tudo</strong> e selecione a pasta <code>sources</code> gerada.<br>Ou no terminal: <code>jadx -d saida aplicativo.apk</code></div><div id="import-error" class="error-box" role="alert" hidden></div><div id="import-progress" aria-live="polite" hidden><div class="progress-label"><span id="progress-text">Procurando arquivos…</span><span id="progress-count"></span></div><progress id="progress-bar" max="100" value="0"></progress><button type="button" id="cancel-import" class="subtle">Cancelar importação</button></div><div class="dialog-actions"><button type="button" id="load-demo" class="subtle">Abrir demonstração</button><button type="submit" id="submit-import" class="primary">Analisar pasta <span>→</span></button></div></form></dialog>
+  <dialog id="import-dialog">
+    <form id="import-form">
+      <div class="dialog-heading"><div class="eyebrow">NEW PROJECT</div><button type="button" class="icon-button close-dialog" aria-label="Close">×</button></div>
+      <h2>Explore your code.</h2>
+      <p>Provide the folder of <code>.java</code> files exported by JADX. Subfolders are read automatically.</p>
+      <label class="field-label" for="project-path">Folder path</label>
+      <input id="project-path" class="path-input" placeholder="/home/user/decompiled-app/sources" required autocomplete="off">
+      <label class="field-label" for="manifest-path">AndroidManifest.xml <small>(optional; by default it is looked up in <code>resources/</code> next to <code>sources</code>)</small></label>
+      <input id="manifest-path" class="path-input" placeholder="/home/user/decompiled-app/resources/AndroidManifest.xml" autocomplete="off">
+      <div class="import-hint">In JADX: <strong>Save all</strong> and select the generated <code>sources</code> folder.<br>Or in a terminal: <code>jadx -d output app.apk</code></div>
+      <div id="import-error" class="error-box" role="alert" hidden></div>
+      <div id="import-progress" aria-live="polite" hidden>
+        <div class="progress-label"><span id="progress-text">Looking for files…</span><span id="progress-count"></span></div>
+        <progress id="progress-bar" max="100" value="0"></progress>
+        <button type="button" id="cancel-import" class="subtle">Cancel import</button>
+      </div>
+      <div class="dialog-actions"><button type="button" id="load-demo" class="subtle">Open demo</button><button type="submit" id="submit-import" class="primary">Analyse folder <span>→</span></button></div>
+    </form>
+  </dialog>
 
-  <dialog id="source-dialog" class="source-dialog"><div class="source-heading"><div><div class="eyebrow">CÓDIGO-FONTE EXPORTADO</div><h2 id="source-title"></h2><p id="source-path"></p></div><div class="source-actions"><button id="jump-declaration" class="subtle">Ir à declaração</button><button id="copy-source" class="subtle">Copiar código</button><button class="icon-button close-dialog" aria-label="Fechar código">×</button></div></div><div id="source-finding" class="source-finding" hidden></div><div id="source-code" class="source-code"></div><div id="source-notice" class="source-notice">A linha da declaração está destacada. Visualização somente para leitura.</div></dialog>
-  <dialog id="warnings-dialog"><div class="dialog-heading"><div class="eyebrow">QUALIDADE DA ANÁLISE</div><button class="icon-button close-dialog" aria-label="Fechar avisos">×</button></div><h2>Avisos da importação</h2><p>Referências incertas permanecem identificadas no mapa.</p><div id="warnings-list"></div></dialog>
-  <dialog id="compare-dialog" class="compare-dialog"><form id="compare-form"><div class="dialog-heading"><div class="eyebrow">DIFERENÇA ENTRE VERSÕES</div><button type="button" class="icon-button close-dialog" aria-label="Fechar">×</button></div><h2>Comparar com outra versão.</h2><p>Informe a exportação do JADX da outra versão do mesmo app. O projeto aberto continua carregado.</p><label class="field-label" for="compare-path">Pasta da outra versão</label><input id="compare-path" class="path-input" required autocomplete="off" placeholder="/home/usuario/app-v2/sources"><fieldset class="compare-direction"><legend>A outra versão é</legend><label><input type="radio" name="other-is" value="old" checked> mais antiga (mostra o que a versão aberta acrescentou)</label><label><input type="radio" name="other-is" value="new"> mais nova</label></fieldset><div id="compare-error" class="error-box" role="alert" hidden></div><p id="compare-progress" class="relations-empty" aria-live="polite" hidden></p><div class="dialog-actions"><button type="button" id="compare-download" class="subtle" disabled>↓ Relatório .md</button><button type="submit" id="compare-submit" class="primary">Comparar <span>→</span></button></div></form><div id="compare-result" class="compare-result"></div></dialog>
+  <dialog id="source-dialog" class="source-dialog">
+    <div class="source-heading">
+      <div><div class="eyebrow">EXPORTED SOURCE CODE</div><h2 id="source-title"></h2><p id="source-path"></p></div>
+      <div class="source-actions"><button id="jump-declaration" class="subtle">Go to declaration</button><button id="copy-source" class="subtle">Copy code</button><button class="icon-button close-dialog" aria-label="Close code">×</button></div>
+    </div>
+    <div id="source-finding" class="source-finding" hidden></div>
+    <div id="source-code" class="source-code"></div>
+    <div id="source-notice" class="source-notice">The declaration line is highlighted. Read-only view.</div>
+  </dialog>
+
+  <dialog id="warnings-dialog">
+    <div class="dialog-heading"><div class="eyebrow">ANALYSIS QUALITY</div><button class="icon-button close-dialog" aria-label="Close warnings">×</button></div>
+    <h2>Import warnings</h2>
+    <p>Uncertain references stay marked on the map.</p>
+    <div id="warnings-list"></div>
+  </dialog>
+
+  <dialog id="compare-dialog" class="compare-dialog">
+    <form id="compare-form">
+      <div class="dialog-heading"><div class="eyebrow">VERSION DIFF</div><button type="button" class="icon-button close-dialog" aria-label="Close">×</button></div>
+      <h2>Compare with another version.</h2>
+      <p>Provide the JADX export of another version of the same app. The open project stays loaded.</p>
+      <label class="field-label" for="compare-path">Folder of the other version</label>
+      <input id="compare-path" class="path-input" required autocomplete="off" placeholder="/home/user/app-v2/sources">
+      <fieldset class="compare-direction">
+        <legend>The other version is</legend>
+        <label><input type="radio" name="other-is" value="old" checked> older (shows what the open version added)</label>
+        <label><input type="radio" name="other-is" value="new"> newer</label>
+      </fieldset>
+      <div id="compare-error" class="error-box" role="alert" hidden></div>
+      <p id="compare-progress" class="relations-empty" aria-live="polite" hidden></p>
+      <div class="dialog-actions"><button type="button" id="compare-download" class="subtle" disabled>↓ Report .md</button><button type="submit" id="compare-submit" class="primary">Compare <span>→</span></button></div>
+    </form>
+    <div id="compare-result" class="compare-result"></div>
+  </dialog>
   <div id="toast" role="status" hidden></div>
 </body>
 </html>

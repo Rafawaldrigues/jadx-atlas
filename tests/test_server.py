@@ -7,14 +7,14 @@ import unittest
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from app import BASE, Handler, State
 from atlas.indexer import Project
+from atlas.server import BASE, Handler, State
 
 
 class ServerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.state = State(Project(BASE / "examples" / "pedidos", demo=True))
+        cls.state = State(Project(BASE / "examples" / "orders", demo=True))
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), partial(Handler, state=cls.state))
         cls.worker = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.worker.start()
@@ -33,8 +33,8 @@ class ServerTests(unittest.TestCase):
     def test_project_and_source_navigation(self):
         project = self.get("/api/project")
         self.assertEqual(project["stats"]["types"], 14)
-        source = self.get("/api/source?id=br.exemplo.pedidos.ui.PedidoActivity")
-        self.assertIn("public class PedidoActivity", source["code"].splitlines()[source["line"] - 1])
+        source = self.get("/api/source?id=com.example.orders.ui.OrderActivity")
+        self.assertIn("public class OrderActivity", source["code"].splitlines()[source["line"] - 1])
 
     def test_unknown_source_cannot_read_arbitrary_files(self):
         with self.assertRaises(HTTPError) as error:
@@ -72,7 +72,7 @@ class ServerTests(unittest.TestCase):
         while self.state.status["busy"] and time.monotonic() < deadline:
             time.sleep(0.01)
         self.assertIs(self.state.project, old)
-        self.assertIn("não encontrada", self.state.status["error"])
+        self.assertIn("not found", self.state.status["error"])
 
     def test_static_app_and_no_directory_listing(self):
         with urlopen(self.url) as response:
@@ -85,7 +85,7 @@ class ServerTests(unittest.TestCase):
     def test_project_payload_has_schema_version_and_demo_manifest(self):
         project = self.get("/api/project")
         self.assertGreaterEqual(project["schemaVersion"], 2)
-        self.assertEqual(project["manifest"]["package"], "br.exemplo.pedidos")
+        self.assertEqual(project["manifest"]["package"], "com.example.orders")
 
     def test_import_rejects_non_string_manifest(self):
         request = Request(

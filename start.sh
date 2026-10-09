@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Atalho: cria o .venv, instala o pacote em modo editável e abre o Atlas.
+# Shortcut: create .venv, install the package in editable mode and start JADX Atlas.
+# Equivalent to: python3 -m venv .venv && .venv/bin/pip install -e . && .venv/bin/jadx-atlas "$@"
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 if [ ! -x .venv/bin/python ]; then

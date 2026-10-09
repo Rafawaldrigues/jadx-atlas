@@ -66,7 +66,7 @@ class RoleTests(unittest.TestCase):
         )
         role = self.roles_of(two, "app.A")["activity"]
         self.assertEqual(role["confidence"], "medium")
-        self.assertIn("ambíguo", role["via"][0])
+        self.assertIn("ambiguous", role["via"][0])
         three = self.project(
             {
                 "p/Base.java": "package p; public class Base extends android.app.Activity {}",
@@ -150,7 +150,7 @@ class RoleTests(unittest.TestCase):
         )
         checks = {c["name"]: c["roleCheck"] for c in p.payload["manifest"]["components"]}
         self.assertEqual(checks, {"m.Wrong": "missing", "m.Right": "high"})
-        self.assertTrue(any("possível erro de resolução" in w["message"] for w in p.payload["warnings"]))
+        self.assertTrue(any("possible resolution error" in w["message"] for w in p.payload["warnings"]))
         self.assertTrue(p.nodes["m.Base"].get("undeclaredComponent"))
         self.assertNotIn("undeclaredComponent", p.nodes["m.Right"])
         self.assertEqual(p.payload["stats"]["undeclaredComponentClasses"], 1)

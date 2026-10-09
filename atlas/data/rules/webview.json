@@ -1,48 +1,224 @@
 [
-  {"id": "webview-javascript-enabled", "title": "JavaScript habilitado em WebView", "severity": "medium", "category": "plataforma",
-   "match": {"kind": "call", "types": ["android.webkit.WebSettings"], "methods": ["setJavaScriptEnabled"], "args": [{"index": 0, "equals": true}],
-             "returnTypes": {"getSettings": "android.webkit.WebSettings"}, "importHints": ["android.webkit.WebView", "android.webkit.WebSettings"]},
-   "description": "Com JavaScript ativo, conteúdo carregado na WebView executa scripts. Combinado com conteúdo não confiável, pontes nativas ou acesso a arquivos, vira vetor de XSS e de abuso de interfaces.",
-   "remediation": "Habilite só quando necessário e apenas para origens confiáveis (HTTPS e lista de hosts permitidos).",
-   "falsePositives": "Muito comum e legítimo em apps que carregam só o próprio conteúdo. A relevância depende da URL carregada e das outras configurações.",
-   "references": ["https://developer.android.com/reference/android/webkit/WebSettings", "https://developer.android.com/privacy-and-security/risks/insecure-webview-native-bridges"]},
-  {"id": "webview-javascript-interface", "title": "Ponte nativa addJavascriptInterface", "severity": "medium", "category": "plataforma",
-   "match": {"kind": "call", "types": ["android.webkit.WebView"], "methods": ["addJavascriptInterface"], "argCount": 2, "importHints": ["android.webkit.WebView"]},
-   "description": "Expõe métodos Java anotados com @JavascriptInterface ao JavaScript da página. Qualquer conteúdo carregado nessa WebView (inclusive iframes) pode chamá-los.",
-   "remediation": "Restrinja a WebView a origens confiáveis, minimize os métodos expostos e prefira WebMessageListener/addWebMessageListener com allowlist de origens.",
-   "falsePositives": "Seguro na prática quando a WebView só carrega conteúdo empacotado e confiável.",
-   "references": ["https://developer.android.com/privacy-and-security/risks/insecure-webview-native-bridges"]},
-  {"id": "webview-file-access", "title": "Acesso a arquivos habilitado em WebView", "severity": "medium", "category": "plataforma",
-   "match": {"kind": "call", "types": ["android.webkit.WebSettings"], "methods": ["setAllowFileAccess"], "args": [{"index": 0, "equals": true}],
-             "returnTypes": {"getSettings": "android.webkit.WebSettings"}, "importHints": ["android.webkit.WebView", "android.webkit.WebSettings"]},
-   "description": "Permite que a WebView carregue file://, o que pode expor arquivos internos do app quando combinado com URLs controladas por terceiros.",
-   "remediation": "Mantenha desabilitado (padrão false a partir do targetSdk 30) e use WebViewAssetLoader para conteúdo local.",
-   "falsePositives": "Inócuo se a WebView nunca carrega URLs externas.",
-   "references": ["https://developer.android.com/privacy-and-security/risks/webview-unsafe-file-inclusion"]},
-  {"id": "webview-file-access-from-file-urls", "title": "setAllowFileAccessFromFileURLs(true)", "severity": "high", "category": "plataforma",
-   "match": {"kind": "call", "types": ["android.webkit.WebSettings"], "methods": ["setAllowFileAccessFromFileURLs"], "args": [{"index": 0, "equals": true}],
-             "returnTypes": {"getSettings": "android.webkit.WebSettings"}, "importHints": ["android.webkit.WebView", "android.webkit.WebSettings"]},
-   "description": "Scripts em páginas file:// podem ler outros arquivos locais.",
-   "remediation": "Não habilite; use WebViewAssetLoader.",
-   "falsePositives": "Raro ser necessário. Verifique se o código é alcançável.",
-   "references": ["https://developer.android.com/privacy-and-security/risks/webview-unsafe-file-inclusion"]},
-  {"id": "webview-universal-access-from-file-urls", "title": "setAllowUniversalAccessFromFileURLs(true)", "severity": "high", "category": "plataforma",
-   "match": {"kind": "call", "types": ["android.webkit.WebSettings"], "methods": ["setAllowUniversalAccessFromFileURLs"], "args": [{"index": 0, "equals": true}],
-             "returnTypes": {"getSettings": "android.webkit.WebSettings"}, "importHints": ["android.webkit.WebView", "android.webkit.WebSettings"]},
-   "description": "Scripts em páginas file:// podem acessar qualquer origem, inclusive ler arquivos locais e enviá-los para fora.",
-   "remediation": "Não habilite; use WebViewAssetLoader.",
-   "falsePositives": "Raro ser necessário.",
-   "references": ["https://developer.android.com/privacy-and-security/risks/webview-unsafe-file-inclusion"]},
-  {"id": "webview-debugging-enabled", "title": "Depuração de WebView habilitada", "severity": "medium", "category": "plataforma",
-   "match": {"kind": "call", "types": ["android.webkit.WebView"], "methods": ["setWebContentsDebuggingEnabled"], "args": [{"index": 0, "equals": true}], "importHints": ["android.webkit.WebView"]},
-   "description": "Permite inspecionar o conteúdo de todas as WebViews do app via DevTools com o aparelho conectado.",
-   "remediation": "Habilite apenas em builds de depuração (por exemplo, condicionado a BuildConfig.DEBUG).",
-   "falsePositives": "Pode estar dentro de um if de depuração que o JADX preservou; confira o contexto.",
-   "references": ["https://developer.android.com/reference/android/webkit/WebView"]},
-  {"id": "webview-loadurl-dynamic", "title": "loadUrl com argumento não literal", "severity": "low", "category": "plataforma",
-   "match": {"kind": "call", "types": ["android.webkit.WebView"], "methods": ["loadUrl"], "args": [{"index": 0, "notLiteral": true}], "importHints": ["android.webkit.WebView"]},
-   "description": "A URL vem de uma variável. Se ela puder vir de fora (Intent, deep link, rede), a WebView pode carregar conteúdo controlado por terceiros.",
-   "remediation": "Valide esquema e host contra uma allowlist antes de carregar.",
-   "falsePositives": "Frequente: a URL pode ser uma constante montada em outro lugar. É só uma pista para seguir o dado manualmente.",
-   "references": ["https://developer.android.com/privacy-and-security/risks/intent-redirection"]}
+  {
+    "id": "webview-javascript-enabled",
+    "title": "JavaScript enabled in a WebView",
+    "severity": "medium",
+    "category": "platform",
+    "match": {
+      "kind": "call",
+      "types": [
+        "android.webkit.WebSettings"
+      ],
+      "methods": [
+        "setJavaScriptEnabled"
+      ],
+      "args": [
+        {
+          "index": 0,
+          "equals": true
+        }
+      ],
+      "returnTypes": {
+        "getSettings": "android.webkit.WebSettings"
+      },
+      "importHints": [
+        "android.webkit.WebView",
+        "android.webkit.WebSettings"
+      ]
+    },
+    "description": "With JavaScript on, content loaded in the WebView runs scripts. Combined with untrusted content, native bridges or file access, it becomes an XSS and interface-abuse vector.",
+    "remediation": "Enable it only when needed and only for trusted origins (HTTPS and a host allowlist).",
+    "falsePositives": "Very common and legitimate in apps that load only their own content. Relevance depends on the loaded URL and the other settings.",
+    "references": [
+      "https://developer.android.com/reference/android/webkit/WebSettings",
+      "https://developer.android.com/privacy-and-security/risks/insecure-webview-native-bridges"
+    ]
+  },
+  {
+    "id": "webview-javascript-interface",
+    "title": "addJavascriptInterface native bridge",
+    "severity": "medium",
+    "category": "platform",
+    "match": {
+      "kind": "call",
+      "types": [
+        "android.webkit.WebView"
+      ],
+      "methods": [
+        "addJavascriptInterface"
+      ],
+      "argCount": 2,
+      "importHints": [
+        "android.webkit.WebView"
+      ]
+    },
+    "description": "Exposes Java methods annotated with @JavascriptInterface to the page's JavaScript. Any content loaded in this WebView (iframes included) can call them.",
+    "remediation": "Restrict the WebView to trusted origins, minimise the exposed methods and prefer WebMessageListener/addWebMessageListener with an origin allowlist.",
+    "falsePositives": "Safe in practice when the WebView only loads bundled, trusted content.",
+    "references": [
+      "https://developer.android.com/privacy-and-security/risks/insecure-webview-native-bridges"
+    ]
+  },
+  {
+    "id": "webview-file-access",
+    "title": "File access enabled in a WebView",
+    "severity": "medium",
+    "category": "platform",
+    "match": {
+      "kind": "call",
+      "types": [
+        "android.webkit.WebSettings"
+      ],
+      "methods": [
+        "setAllowFileAccess"
+      ],
+      "args": [
+        {
+          "index": 0,
+          "equals": true
+        }
+      ],
+      "returnTypes": {
+        "getSettings": "android.webkit.WebSettings"
+      },
+      "importHints": [
+        "android.webkit.WebView",
+        "android.webkit.WebSettings"
+      ]
+    },
+    "description": "Lets the WebView load file:// URLs, which may expose the app's internal files when combined with third-party-controlled URLs.",
+    "remediation": "Keep it disabled (default false from targetSdk 30) and use WebViewAssetLoader for local content.",
+    "falsePositives": "Harmless if the WebView never loads external URLs.",
+    "references": [
+      "https://developer.android.com/privacy-and-security/risks/webview-unsafe-file-inclusion"
+    ]
+  },
+  {
+    "id": "webview-file-access-from-file-urls",
+    "title": "setAllowFileAccessFromFileURLs(true)",
+    "severity": "high",
+    "category": "platform",
+    "match": {
+      "kind": "call",
+      "types": [
+        "android.webkit.WebSettings"
+      ],
+      "methods": [
+        "setAllowFileAccessFromFileURLs"
+      ],
+      "args": [
+        {
+          "index": 0,
+          "equals": true
+        }
+      ],
+      "returnTypes": {
+        "getSettings": "android.webkit.WebSettings"
+      },
+      "importHints": [
+        "android.webkit.WebView",
+        "android.webkit.WebSettings"
+      ]
+    },
+    "description": "Scripts in file:// pages can read other local files.",
+    "remediation": "Do not enable it; use WebViewAssetLoader.",
+    "falsePositives": "Rarely needed. Check whether the code is reachable.",
+    "references": [
+      "https://developer.android.com/privacy-and-security/risks/webview-unsafe-file-inclusion"
+    ]
+  },
+  {
+    "id": "webview-universal-access-from-file-urls",
+    "title": "setAllowUniversalAccessFromFileURLs(true)",
+    "severity": "high",
+    "category": "platform",
+    "match": {
+      "kind": "call",
+      "types": [
+        "android.webkit.WebSettings"
+      ],
+      "methods": [
+        "setAllowUniversalAccessFromFileURLs"
+      ],
+      "args": [
+        {
+          "index": 0,
+          "equals": true
+        }
+      ],
+      "returnTypes": {
+        "getSettings": "android.webkit.WebSettings"
+      },
+      "importHints": [
+        "android.webkit.WebView",
+        "android.webkit.WebSettings"
+      ]
+    },
+    "description": "Scripts in file:// pages can access any origin, including reading local files and sending them out.",
+    "remediation": "Do not enable it; use WebViewAssetLoader.",
+    "falsePositives": "Rarely needed.",
+    "references": [
+      "https://developer.android.com/privacy-and-security/risks/webview-unsafe-file-inclusion"
+    ]
+  },
+  {
+    "id": "webview-debugging-enabled",
+    "title": "WebView debugging enabled",
+    "severity": "medium",
+    "category": "platform",
+    "match": {
+      "kind": "call",
+      "types": [
+        "android.webkit.WebView"
+      ],
+      "methods": [
+        "setWebContentsDebuggingEnabled"
+      ],
+      "args": [
+        {
+          "index": 0,
+          "equals": true
+        }
+      ],
+      "importHints": [
+        "android.webkit.WebView"
+      ]
+    },
+    "description": "Allows inspecting the content of every WebView in the app through DevTools with the device connected.",
+    "remediation": "Enable it only in debug builds (for example behind BuildConfig.DEBUG).",
+    "falsePositives": "It may sit behind a debug check that JADX preserved; check the context.",
+    "references": [
+      "https://developer.android.com/reference/android/webkit/WebView"
+    ]
+  },
+  {
+    "id": "webview-loadurl-dynamic",
+    "title": "loadUrl with a non-literal argument",
+    "severity": "low",
+    "category": "platform",
+    "match": {
+      "kind": "call",
+      "types": [
+        "android.webkit.WebView"
+      ],
+      "methods": [
+        "loadUrl"
+      ],
+      "args": [
+        {
+          "index": 0,
+          "notLiteral": true
+        }
+      ],
+      "importHints": [
+        "android.webkit.WebView"
+      ]
+    },
+    "description": "The URL comes from a variable. If it can come from outside (Intent, deep link, network), the WebView may load third-party-controlled content.",
+    "remediation": "Validate scheme and host against an allowlist before loading.",
+    "falsePositives": "Frequent: the URL may be a constant built elsewhere. It is only a lead to follow the data manually.",
+    "references": [
+      "https://developer.android.com/privacy-and-security/risks/intent-redirection"
+    ]
+  }
 ]

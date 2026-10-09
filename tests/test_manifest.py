@@ -44,7 +44,7 @@ class ExportedRuleTests(unittest.TestCase):
         self.assertIs(one('<activity android:name=".A" android:exported="true"/>')["exported"], True)
         result = one(f'<activity android:name=".A" android:exported="false">{FILTER}</activity>')
         self.assertIs(result["exported"], False)
-        self.assertEqual(result["exportedReason"], "explícito")
+        self.assertEqual(result["exportedReason"], "explicit")
 
     def test_resource_reference_is_unknown_with_guess_from_bools(self):
         result = one('<activity android:name=".A" android:exported="@bool/exp"/>', {"exp": {"default": "true"}})
@@ -59,20 +59,20 @@ class ExportedRuleTests(unittest.TestCase):
         )
         self.assertEqual(result["exported"], "unknown")
         self.assertIs(result["exportedGuess"], True)
-        self.assertIn("varia por configuração", result["exportedGuessReason"])
+        self.assertIn("varies by configuration", result["exportedGuessReason"])
 
     def test_unresolved_resource_guesses_with_implicit_rule(self):
         with_filter = one(f'<activity android:name=".A" android:exported="@bool/missing">{FILTER}</activity>')
         self.assertEqual(with_filter["exported"], "unknown")
         self.assertIs(with_filter["exportedGuess"], True)
-        self.assertIn("regra implícita", with_filter["exportedGuessReason"])
+        self.assertIn("implicit rule", with_filter["exportedGuessReason"])
         without = one('<activity android:name=".A" android:exported="@bool/missing"/>')
         self.assertIs(without["exportedGuess"], False)
 
     def test_implicit_by_intent_filter_below_31(self):
         result = one(f'<receiver android:name=".R">{FILTER}</receiver>')
         self.assertIs(result["exported"], True)
-        self.assertIn("implícito por intent-filter", result["exportedReason"])
+        self.assertIn("implicit through intent-filter", result["exportedReason"])
 
     def test_missing_exported_with_filter_at_31_is_inconsistent_with_guess(self):
         old_devices = one(
@@ -228,20 +228,20 @@ class HostileInputTests(unittest.TestCase):
     def test_xxe_is_refused(self):
         self.assertRefusedQuickly(
             b'<?xml version="1.0"?><!DOCTYPE m [<!ENTITY x SYSTEM "file:///etc/passwd">]><manifest package="&x;"/>',
-            "DTD ou entidades",
+            "DTDs and entities",
         )
 
     def test_billion_laughs_is_refused(self):
         entities = "".join(f'<!ENTITY l{i} "{f"&l{i - 1};" * 10}">' for i in range(1, 10))
         data = f'<?xml version="1.0"?><!DOCTYPE m [<!ENTITY l0 "lol">{entities}]><manifest package="&l9;"/>'.encode()
-        self.assertRefusedQuickly(data, "DTD ou entidades")
+        self.assertRefusedQuickly(data, "DTDs and entities")
 
     def test_huge_deep_and_binary_manifests(self):
-        self.assertRefusedQuickly(b"<manifest>" + b" " * (4 * 1024 * 1024) + b"</manifest>", "maior que 4 MiB")
-        self.assertRefusedQuickly(b"<manifest>" + b"<a>" * 70 + b"</a>" * 70 + b"</manifest>", "níveis")
-        self.assertRefusedQuickly(b"\x03\x00\x08\x00" + b"\x00" * 64, "binário")
-        self.assertRefusedQuickly(b"<resources/>", "não é <manifest>")
-        self.assertRefusedQuickly(b"<manifest", "inválido")
+        self.assertRefusedQuickly(b"<manifest>" + b" " * (4 * 1024 * 1024) + b"</manifest>", "larger than 4 MiB")
+        self.assertRefusedQuickly(b"<manifest>" + b"<a>" * 70 + b"</a>" * 70 + b"</manifest>", "levels")
+        self.assertRefusedQuickly(b"\x03\x00\x08\x00" + b"\x00" * 64, "binary")
+        self.assertRefusedQuickly(b"<resources/>", "is not <manifest>")
+        self.assertRefusedQuickly(b"<manifest", "invalid")
 
 
 class ProjectIntegrationTests(unittest.TestCase):
@@ -281,7 +281,7 @@ class ProjectIntegrationTests(unittest.TestCase):
         self.assertEqual((gone["exported"], gone["exportedGuess"]), ("unknown", True))
         self.assertEqual(payload["stats"]["componentsWithoutClass"], 2)
         self.assertEqual(payload["stats"]["potentiallyExported"], 1)
-        self.assertTrue(any("não está nas fontes" in w["message"] for w in payload["warnings"]))
+        self.assertTrue(any("is not in the sources" in w["message"] for w in payload["warnings"]))
 
     def test_missing_manifest_keeps_previous_payload_shape(self):
         project = Project(self.make({"A.java": "class A {}"}))
@@ -298,10 +298,10 @@ class ProjectIntegrationTests(unittest.TestCase):
         self.assertTrue(any("DTD" in w["message"] for w in project.payload["warnings"]))
         with self.assertRaisesRegex(ValueError, "DTD"):
             Project(root, manifest=root / "AndroidManifest.xml")
-        with self.assertRaisesRegex(ValueError, "não encontrado"):
+        with self.assertRaisesRegex(ValueError, "not found"):
             Project(root, manifest=root / "nope.xml")
 
-    @unittest.skipUnless(can_symlink(), "o sistema não permite criar links simbólicos")
+    @unittest.skipUnless(can_symlink(), "this system cannot create symbolic links")
     def test_symlinked_manifest_is_ignored(self):
         root = self.make({"A.java": "class A {}", "real.xml": manifest("")})
         (root / "AndroidManifest.xml").symlink_to(root / "real.xml")
@@ -312,9 +312,9 @@ class ProjectIntegrationTests(unittest.TestCase):
     def test_demo_has_attack_surface(self):
         from atlas.server import BASE
 
-        project = Project(BASE / "examples" / "pedidos", demo=True)
+        project = Project(BASE / "examples" / "orders", demo=True)
         self.assertEqual(project.payload["stats"]["manifest"], "found")
-        self.assertIs(project.nodes["br.exemplo.pedidos.ui.CheckoutActivity"]["component"]["exported"], True)
+        self.assertIs(project.nodes["com.example.orders.ui.CheckoutActivity"]["component"]["exported"], True)
         self.assertEqual(project.payload["stats"]["deepLinks"], 1)
 
 

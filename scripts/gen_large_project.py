@@ -44,14 +44,14 @@ def short_names():
 
 def generate(out: Path, classes=5000, depth=6, obfuscated=0.3, packages=None, interfaces=0.1, seed=1, force=False):
     if not 0 <= obfuscated <= 1 or not 0 <= interfaces < 1:
-        raise ValueError("--obfuscated e --interfaces devem estar entre 0 e 1")
+        raise ValueError("--obfuscated and --interfaces must be between 0 and 1")
     if classes < 1 or depth < 1:
-        raise ValueError("--classes e --depth devem ser positivos")
+        raise ValueError("--classes and --depth must be positive")
     if out.exists() and any(out.iterdir()):
         if not (out / MARKER).is_file():
-            raise ValueError(f"{out} não está vazia e não foi criada por este gerador; nada foi apagado")
+            raise ValueError(f"{out} is not empty and was not created by this generator; nothing was deleted")
         if not force:
-            raise ValueError(f"{out} já existe; use --force para recriar")
+            raise ValueError(f"{out} already exists; use --force to recreate it")
         shutil.rmtree(out)
     rng = random.Random(seed)
     package_count = packages or max(1, classes // 200)
@@ -158,13 +158,15 @@ def generate(out: Path, classes=5000, depth=6, obfuscated=0.3, packages=None, in
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, default=Path("artifacts/large-project"))
-    parser.add_argument("--classes", type=int, default=5000, help="Total de tipos (classes + interfaces)")
-    parser.add_argument("--depth", type=int, default=6, help="Profundidade máxima de herança")
-    parser.add_argument("--obfuscated", type=float, default=0.3, help="Fração de pacotes com nomes ofuscados (0 a 1)")
-    parser.add_argument("--packages", type=int, help="Número de pacotes (padrão: classes / 200)")
-    parser.add_argument("--interfaces", type=float, default=0.1, help="Fração aproximada de interfaces")
+    parser.add_argument("--classes", type=int, default=5000, help="Total number of types (classes + interfaces)")
+    parser.add_argument("--depth", type=int, default=6, help="Maximum inheritance depth")
+    parser.add_argument(
+        "--obfuscated", type=float, default=0.3, help="Fraction of packages with obfuscated names (0 to 1)"
+    )
+    parser.add_argument("--packages", type=int, help="Number of packages (default: classes / 200)")
+    parser.add_argument("--interfaces", type=float, default=0.1, help="Approximate fraction of interfaces")
     parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--force", action="store_true", help="Recria a pasta se ela foi gerada por este script")
+    parser.add_argument("--force", action="store_true", help="Recreate the folder if this script generated it")
     args = parser.parse_args(argv)
     try:
         summary = generate(

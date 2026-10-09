@@ -33,7 +33,7 @@ class Annotations:
         self.root = Path(root).resolve()
         directory = data_dir().resolve()
         if directory == self.root or directory.is_relative_to(self.root):
-            raise ValueError("O diretório de anotações não pode ficar dentro da pasta analisada.")
+            raise ValueError("The annotations directory cannot be inside the analysed folder.")
         key = hashlib.sha256(str(self.root).encode()).hexdigest()[:32]
         self.file = directory / "annotations" / f"{key}.json"
 
@@ -47,7 +47,7 @@ class Annotations:
     def update(self, class_id, alias=None, tags=None, note=None):
         """Set (or clear, when everything is empty) the annotation of one class."""
         if not isinstance(class_id, str) or not class_id or len(class_id) > 1000:
-            raise ValueError("Classe inválida.")
+            raise ValueError("Invalid class.")
         alias = (alias or "").strip()[:MAX_ALIAS]
         tags = [t.strip()[:MAX_TAG] for t in (tags or []) if isinstance(t, str) and t.strip()][:MAX_TAGS]
         note = (note or "").strip()[:MAX_NOTE]
@@ -55,7 +55,7 @@ class Annotations:
             classes = self.load()
             if alias or tags or note:
                 if class_id not in classes and len(classes) >= MAX_CLASSES:
-                    raise ValueError("Limite de anotações atingido.")
+                    raise ValueError("Annotation limit reached.")
                 classes[class_id] = {"alias": alias, "tags": tags, "note": note}
             else:
                 classes.pop(class_id, None)

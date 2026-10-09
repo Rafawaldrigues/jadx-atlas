@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 
+from atlas import __version__
 from atlas.indexer import Project
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -47,7 +48,7 @@ class GeneratorTests(unittest.TestCase):
     def test_refuses_to_delete_foreign_directories(self):
         (self.root / "mine").mkdir()
         (self.root / "mine" / "keep.txt").write_text("x")
-        with self.assertRaisesRegex(ValueError, "nada foi apagado"):
+        with self.assertRaisesRegex(ValueError, "nothing was deleted"):
             generate(self.root / "mine", classes=10, force=True)
         self.assertTrue((self.root / "mine" / "keep.txt").exists())
         generate(self.root / "gen", classes=10)
@@ -64,7 +65,7 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual((args.command, args.path, args.port), ("serve", "/tmp/x", 9000))
         with self.assertRaises(SystemExit) as exit_, redirect_stdout(io.StringIO()) as out:
             main(["--version"])
-        self.assertIn("0.1.0", out.getvalue())
+        self.assertIn(__version__, out.getvalue())
         self.assertEqual(exit_.exception.code, 0)
 
 

@@ -18,7 +18,7 @@ from atlas.server import BASE, Handler, State
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from gen_large_project import generate  # noqa: E402
 
-DEMO = BASE / "examples" / "pedidos"
+DEMO = BASE / "examples" / "orders"
 
 
 class Running:
@@ -67,11 +67,11 @@ class TokenTests(unittest.TestCase):
     def test_verbose_log_has_no_query_string(self):
         stream = io.StringIO()
         with redirect_stderr(stream), Running(State(Project(DEMO, demo=True)), verbose=True) as server:
-            server.get("/api/source?id=br.exemplo.pedidos.ui.PedidoActivity")
+            server.get("/api/source?id=com.example.orders.ui.OrderActivity")
         lines = [json.loads(line) for line in stream.getvalue().splitlines() if line.startswith("{")]
         self.assertTrue(lines)
         self.assertEqual(lines[-1]["route"], "/api/source")
-        self.assertNotIn("PedidoActivity", stream.getvalue())
+        self.assertNotIn("OrderActivity", stream.getvalue())
 
 
 class StateConcurrencyTests(unittest.TestCase):
@@ -94,12 +94,12 @@ class StateConcurrencyTests(unittest.TestCase):
         original = Project(DEMO, demo=True)
         state = State(original, workers=1)
         state.start(str(self.big))
-        with self.assertRaisesRegex(ValueError, "em andamento"):
+        with self.assertRaisesRegex(ValueError, "already running"):
             state.start(str(self.big))
         state.cancel.set()
         self.wait(state)
         self.assertIs(state.project, original)
-        self.assertIn("cancelada", state.status["error"])
+        self.assertIn("cancelled", state.status["error"])
 
     def test_successful_import_replaces_project_and_drops_comparison(self):
         state = State(Project(DEMO, demo=True), workers=1)

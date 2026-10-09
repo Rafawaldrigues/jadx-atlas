@@ -30,8 +30,8 @@ test('exposure helpers never call an unknown value exported', () => {
   assert.equal(logic.isExposed({ exported: true }), true);
   assert.equal(logic.isExposed({ exported: 'unknown', exportedGuess: true }), true);
   assert.equal(logic.isPotential({ exported: 'unknown', exportedGuess: false }), false);
-  assert.match(logic.exposureLabel({ exported: 'unknown', exportedGuess: true }), /potencialmente/);
-  assert.equal(logic.exposureLabel({ exported: true, permission: null }), 'exportado · sem permissão');
+  assert.match(logic.exposureLabel({ exported: 'unknown', exportedGuess: true }), /potentially/);
+  assert.equal(logic.exposureLabel({ exported: true, permission: null }), 'exported · no permission');
 });
 
 test('ancestry is breadth first and cycle safe', () => {

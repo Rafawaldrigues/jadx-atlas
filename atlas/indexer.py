@@ -238,7 +238,7 @@ class Project:
         started = time.perf_counter()
         self.root = Path(root).expanduser().resolve()
         if not self.root.is_dir():
-            raise ValueError("Pasta não encontrada. Informe o caminho da pasta exportada pelo JADX.")
+            raise ValueError("Folder not found. Provide the path of the folder exported by JADX.")
         self.nodes = {}
         self.edges = []
         self.files = {}
@@ -253,9 +253,9 @@ class Project:
             paths.extend(Path(folder) / name for name in sorted(names) if name.endswith(".java"))
         if not paths:
             raise ValueError(
-                "Nenhum arquivo .java encontrado. Exporte o código no JADX e selecione a pasta sources ou sua pasta principal."
+                "No .java files found. Export the code with JADX and select the sources folder or its parent."
             )
-        progress(0, len(paths), "Lendo declarações Java")
+        progress(0, len(paths), "Reading Java declarations")
         relatives = [file.relative_to(self.root).as_posix() for file in paths]
         self.workers = workers if workers else parallel.default_workers(len(relatives))
         self.cache_hit = False
@@ -292,7 +292,7 @@ class Project:
             try:
                 cache.save(parsed)
             except OSError as error:
-                warnings.append({"path": None, "message": f"Cache em disco não gravado: {error}"})
+                warnings.append({"path": None, "message": f"Disk cache not written: {error}"})
         parse_errors = 0
         for relative in relatives:  # input order: duplicates keep the first occurrence, as before
             result = parsed[relative]
@@ -305,7 +305,7 @@ class Project:
                 warnings.append(
                     {
                         "path": relative,
-                        "message": "Java incompleto ou inválido: as declarações recuperáveis foram indexadas.",
+                        "message": "Incomplete or invalid Java: recoverable declarations were indexed.",
                     }
                 )
             for node in result["classes"]:
@@ -313,7 +313,7 @@ class Project:
                     warnings.append(
                         {
                             "path": relative,
-                            "message": f"Declaração duplicada de {node['id']}; mantida a primeira ocorrência.",
+                            "message": f"Duplicate declaration of {node['id']}; the first one was kept.",
                         }
                     )
                 else:
@@ -321,8 +321,8 @@ class Project:
         if cancelled():
             raise Cancelled()
         if not self.nodes:
-            raise ValueError("Não foi possível recuperar nenhuma declaração Java nesta pasta.")
-        progress(len(paths), len(paths), "Resolvendo herança e interfaces")
+            raise ValueError("Could not recover any Java declaration in this folder.")
+        progress(len(paths), len(paths), "Resolving inheritance and interfaces")
         symbols = set(self.nodes)
         uncertain = 0
         for node in list(self.nodes.values()):
@@ -338,7 +338,7 @@ class Project:
                         {
                             "path": node["path"],
                             "message": f"{node['id']}: {ref['name']} "
-                            + ("é ambíguo" if status == "ambiguous" else "não pôde ser resolvido")
+                            + ("is ambiguous" if status == "ambiguous" else "could not be resolved")
                             + ".",
                         }
                     )
@@ -348,7 +348,7 @@ class Project:
                         "name": ref["name"].rsplit(".", 1)[-1],
                         "package": target.rsplit(".", 1)[0]
                         if status == "external" and "." in target
-                        else "Referência não resolvida",
+                        else "Unresolved reference",
                         "kind": "interface" if ref["kind"] == "implements" or node["kind"] == "interface" else "class",
                         "external": True,
                         "abstract": False,
@@ -396,7 +396,7 @@ class Project:
             severity_counts[finding["severity"]] += 1
         self.payload = {
             "schemaVersion": SCHEMA_VERSION,
-            "name": "Pedidos · demonstração" if demo else self.root.name,
+            "name": "Orders · demo" if demo else self.root.name,
             "root": str(self.root),
             "demo": demo,
             "nodes": list(self.nodes.values()),
@@ -447,7 +447,7 @@ class Project:
         """node.library for known third-party prefixes (never the app package) and the obfuscation estimate.
 
         Obfuscation: share of project classes whose simple name has at most 2 characters (`a`, `ab`, `a$b`)
-        or that JADX renamed (originalName). < 10% → baixa, < 40% → média, otherwise alta.
+        or that JADX renamed (originalName). < 10% → low, < 40% → medium, otherwise high.
         """
         prefixes = json.loads(
             (Path(__file__).resolve().parent / "data" / "libraries.json").read_text(encoding="utf-8")
@@ -460,7 +460,7 @@ class Project:
                 node["library"] = True
         short = [n for n in own if len(n["name"].rsplit("$", 1)[-1]) <= 2 or n.get("originalName")]
         fraction = len(short) / len(own) if own else 0.0
-        level = "baixa" if fraction < 0.1 else "média" if fraction < 0.4 else "alta"
+        level = "low" if fraction < 0.1 else "medium" if fraction < 0.4 else "high"
         return {"shortNames": len(short), "classes": len(own), "fraction": round(fraction, 3), "level": level}
 
     def _search_index(self):
@@ -535,7 +535,7 @@ class Project:
     def neighbors(self, class_id, depth=1, layers=("inheritance", "intents"), limit=300):
         """Nodes and edges around one class (both directions), for drawing only the selected neighbourhood."""
         if class_id not in self.nodes:
-            raise ValueError("Classe desconhecida.")
+            raise ValueError("Unknown class.")
         depth = max(1, min(int(depth), 3))
         edges = []
         if "inheritance" in layers:
@@ -581,24 +581,24 @@ class Project:
         """Case-insensitive substring search over names, aliases, packages, roles, rules and strings."""
         needle = (query or "").strip().lower()
         if len(needle) < 2:
-            raise ValueError("Digite pelo menos 2 caracteres.")
+            raise ValueError("Type at least 2 characters.")
         try:
             limit = max(1, min(int(limit), 500))
         except ValueError:
-            raise ValueError("limit deve ser um número.") from None
-        priority = {"nome": 0, "alias": 1, "pacote": 2, "papel": 3, "regra": 4, "string": 5}
+            raise ValueError("limit must be a number.") from None
+        priority = {"name": 0, "alias": 1, "package": 2, "role": 3, "rule": 4, "string": 5}
         results = []
         for class_id in sorted(self.search_index):
             node, row = self.nodes[class_id], self.search_index[class_id]
             fields = [
-                ("nome", class_id),
+                ("name", class_id),
                 ("alias", node.get("originalName") or ""),
                 ("alias", node.get("sourceFile") or ""),
-                ("pacote", node["package"]),
+                ("package", node["package"]),
             ]
             fields += (
-                [("papel", r) for r in row["roles"]]
-                + [("regra", r) for r in row["rules"]]
+                [("role", r) for r in row["roles"]]
+                + [("rule", r) for r in row["rules"]]
                 + [("string", s) for s in row["strings"]]
             )
             for field, text in fields:
@@ -649,12 +649,12 @@ class Project:
             for name, line in node.get("_uses", {}).items():
                 target, status, _ = resolve(name, node, symbols)
                 if status == "resolved" and target != node["id"]:
-                    graph.add(node["id"], target, "uses", "referência de tipo", line, "high")
+                    graph.add(node["id"], target, "uses", "type reference", line, "high")
         for edge in self.edges:
             if edge["kind"] == "extends" and edge["resolution"] == "resolved":
                 # Inherited code runs as the subclass: walking up is allowed when the caller asks for it.
                 graph.add(
-                    edge["source"], edge["target"], "extends", "herança", self.nodes[edge["source"]]["line"], "high"
+                    edge["source"], edge["target"], "extends", "inheritance", self.nodes[edge["source"]]["line"], "high"
                 )
         return graph.freeze()
 
@@ -669,7 +669,7 @@ class Project:
                 or (component["exported"] in {"unknown", "inconsistent"} and component.get("exportedGuess"))
             ):
                 reasons.append(
-                    f"{component['type']} exportado" + ("" if component["exported"] is True else " (potencialmente)")
+                    f"exported {component['type']}" + ("" if component["exported"] is True else " (potentially)")
                 )
             if node.get("deepLinkHandler"):
                 reasons.append("deep link")
@@ -687,9 +687,9 @@ class Project:
     def paths(self, entry, target=None, max_depth=6, inheritance=True):
         """Possible paths from `entry` to `target` (or to every default target)."""
         if entry not in self.nodes or self.nodes[entry]["external"]:
-            raise ValueError("Entrada desconhecida.")
+            raise ValueError("Unknown entry.")
         if target is not None and (target not in self.nodes or self.nodes[target]["external"]):
-            raise ValueError("Alvo desconhecido.")
+            raise ValueError("Unknown target.")
         targets = [target] if target else self.payload["pathTargets"]
         kinds = {"launches", "sends_action", "registers_receiver", "uses"} | ({"extends"} if inheritance else set())
         limits = {"maxDepth": max(1, min(int(max_depth), 10))}
@@ -703,7 +703,7 @@ class Project:
     def uses(self, class_id, limit=200):
         """Type-reference neighbours of one class, both directions, for the inspector."""
         if class_id not in self.nodes:
-            raise ValueError("Classe desconhecida.")
+            raise ValueError("Unknown class.")
         out = [
             {"id": t, "line": line} for t, kind, _, line, _ in self.flow.adjacency.get(class_id, ()) if kind == "uses"
         ]
@@ -799,7 +799,7 @@ class Project:
                             {
                                 "line": event["line"],
                                 "via": "registerReceiver",
-                                "reason": "receptor fora das fontes ou de tipo desconhecido",
+                                "reason": "receiver not in the sources or of unknown type",
                                 "text": event["text"],
                             }
                         )
@@ -812,7 +812,7 @@ class Project:
                         {
                             "line": event["line"],
                             "via": event["via"],
-                            "reason": "Intent não rastreável dentro do método",
+                            "reason": "Intent not traceable within the method",
                             "text": event["argument"],
                         }
                     )
@@ -826,7 +826,7 @@ class Project:
                             {
                                 "line": event["line"],
                                 "via": event["via"],
-                                "reason": "classe alvo fora das fontes",
+                                "reason": "target class not in the sources",
                                 "text": intent["targetType"],
                             }
                         )
@@ -841,7 +841,7 @@ class Project:
                             {
                                 "line": event["line"],
                                 "via": event["via"],
-                                "reason": "nome de classe não resolvido",
+                                "reason": "class name not resolved",
                                 "text": name or origin,
                             }
                         )
@@ -853,7 +853,7 @@ class Project:
                             {
                                 "line": event["line"],
                                 "via": event["via"],
-                                "reason": "ação não resolvida (dinâmica)",
+                                "reason": "action not resolved (dynamic)",
                                 "text": origin,
                             }
                         )
@@ -873,7 +873,7 @@ class Project:
                             {
                                 "line": event["line"],
                                 "via": event["via"],
-                                "reason": "nenhum intent-filter do Manifest declara esta ação",
+                                "reason": "no manifest intent-filter declares this action",
                                 "action": action,
                             }
                         )
@@ -882,7 +882,7 @@ class Project:
                     {
                         "line": event["line"],
                         "via": event["via"],
-                        "reason": "Intent sem alvo nem ação",
+                        "reason": "Intent without target or action",
                         "text": event["argument"],
                     }
                 )
@@ -939,7 +939,7 @@ class Project:
                 warnings.append(
                     {
                         "path": data["path"],
-                        "message": f"{component['name']} é declarado como {component['type']}, mas a cadeia de herança de {component['class']} não chega ao tipo esperado: possível erro de resolução ou classe base fora da tabela de framework.",
+                        "message": f"{component['name']} is declared as {component['type']}, but the inheritance chain of {component['class']} does not reach the expected type: possible resolution error or a base class missing from the framework table.",
                     }
                 )
         declared = {c["class"] for c in data["components"] if c["class"]} | {data["application"]["name"]}
@@ -968,9 +968,7 @@ class Project:
         except (manifest_module.ManifestError, OSError) as error:
             if explicit:
                 raise ValueError(str(error)) from None
-            warnings.append(
-                {"path": path.name, "message": f"{error}. A camada de superfície de ataque está desligada."}
-            )
+            warnings.append({"path": path.name, "message": f"{error}. The attack-surface layer is off."})
             return None, "invalid"
         for message in data["warnings"]:
             warnings.append({"path": data["path"], "message": message})
@@ -994,7 +992,7 @@ class Project:
                 warnings.append(
                     {
                         "path": data["path"],
-                        "message": f"{component['type']} {component['name']} (linha {component['line']}) está no Manifest, mas a classe {component['classId']} não está nas fontes (falha do JADX, desofuscação ou componente de biblioteca ausente).",
+                        "message": f"{component['type']} {component['name']} (line {component['line']}) is in the manifest, but class {component['classId']} is not in the sources (JADX failure, deobfuscation or missing library component).",
                     }
                 )
                 continue
@@ -1009,19 +1007,19 @@ class Project:
         if app_class and app_class in self.nodes and not self.nodes[app_class]["external"]:
             self.nodes[app_class]["applicationClass"] = True
         elif app_class:
-            warnings.append({"path": data["path"], "message": f"Classe Application {app_class} não está nas fontes."})
+            warnings.append({"path": data["path"], "message": f"Application class {app_class} is not in the sources."})
         return data, "found"
 
     def source(self, class_id):
         node = self.nodes.get(class_id)
         if not node or not node["path"]:
-            raise ValueError("Esta referência não possui código no projeto importado.")
+            raise ValueError("This reference has no code in the imported project.")
         file = self.root / node["path"]
         if file.is_symlink() or not file.resolve().is_relative_to(self.root):
-            raise ValueError("O caminho do arquivo mudou. Importe o projeto novamente.")
+            raise ValueError("The file path changed. Import the project again.")
         stat = file.stat()
         if (stat.st_mtime_ns, stat.st_size) != self.files[node["path"]]:
-            raise ValueError("O arquivo mudou desde a análise. Importe o projeto novamente para atualizar as linhas.")
+            raise ValueError("The file changed since the analysis. Import the project again to refresh the lines.")
         return {
             "path": node["path"],
             "line": node["line"],

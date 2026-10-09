@@ -29,10 +29,10 @@ def parse_one(root, relative, findings):
     file = Path(root) / relative
     try:
         if file.is_symlink():
-            raise ValueError("Link simbólico ignorado")
+            raise ValueError("Symbolic link ignored")
         stat = file.stat()
         if stat.st_size > MAX_FILE_BYTES:
-            raise ValueError("Arquivo maior que 8 MiB; ignorado")
+            raise ValueError("File larger than 8 MiB; ignored")
         classes, has_error = parse_file(file.read_bytes(), relative, rules_module.default_index() if findings else None)
         return {
             "relative": relative,
@@ -109,7 +109,7 @@ class IndexCache:
         self.root = Path(root).resolve()
         directory = cache_dir().resolve()
         if directory == self.root or directory.is_relative_to(self.root):
-            raise ValueError("O diretório de cache não pode ficar dentro da pasta analisada.")
+            raise ValueError("The cache directory cannot be inside the analysed folder.")
         self.file = directory / "index" / f"{hashlib.sha256(str(self.root).encode()).hexdigest()[:32]}.json.gz"
         self.key = global_key(findings)
 

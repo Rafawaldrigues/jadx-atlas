@@ -1,26 +1,109 @@
 [
-  {"id": "tls-trustmanager-accepts-all", "title": "TrustManager que não valida certificados", "severity": "high", "category": "rede",
-   "match": {"kind": "override", "roles": ["trust_manager"], "methods": ["checkServerTrusted"], "body": "empty"},
-   "description": "checkServerTrusted com corpo vazio aceita qualquer certificado, permitindo interceptação (MITM) das conexões TLS que usarem esse TrustManager.",
-   "remediation": "Use o TrustManager padrão da plataforma e Network Security Config para pinning ou CAs adicionais.",
-   "falsePositives": "Código morto ou usado só em builds de teste. Confira onde o TrustManager é instalado (SSLContext.init).",
-   "references": ["https://developer.android.com/privacy-and-security/risks/unsafe-trustmanager", "https://developer.android.com/privacy-and-security/security-ssl"]},
-  {"id": "tls-hostname-verifier-accepts-all", "title": "HostnameVerifier que sempre retorna true", "severity": "high", "category": "rede",
-   "match": {"kind": "override", "roles": ["hostname_verifier"], "methods": ["verify"], "body": "returns-true"},
-   "description": "Aceita qualquer nome de host, anulando a verificação de identidade do servidor TLS.",
-   "remediation": "Use o HostnameVerifier padrão (HttpsURLConnection.getDefaultHostnameVerifier()).",
-   "falsePositives": "Código morto ou de teste.",
-   "references": ["https://developer.android.com/privacy-and-security/risks/unsafe-hostname"]},
-  {"id": "tls-webview-ssl-error-proceed", "title": "onReceivedSslError chama proceed()", "severity": "high", "category": "rede",
-   "match": {"kind": "override", "roles": ["webview_client"], "methods": ["onReceivedSslError"], "calls": ["proceed"]},
-   "description": "A WebView continua carregando a página apesar de erro de certificado, permitindo MITM.",
-   "remediation": "Chame handler.cancel() (comportamento padrão) e não ignore erros de TLS.",
-   "falsePositives": "proceed() pode estar atrás de uma confirmação do usuário ou de um flag de depuração; confira o corpo.",
-   "references": ["https://developer.android.com/reference/android/webkit/WebViewClient", "https://developer.android.com/privacy-and-security/security-ssl"]},
-  {"id": "tls-legacy-protocol", "title": "SSLContext com protocolo antigo", "severity": "medium", "category": "rede",
-   "match": {"kind": "call", "types": ["javax.net.ssl.SSLContext"], "methods": ["getInstance"], "args": [{"index": 0, "in": ["SSL", "SSLv2", "SSLv3", "TLSv1", "TLSv1.1"], "ignoreCase": true}], "importHints": ["javax.net.ssl.SSLContext"]},
-   "description": "Solicita explicitamente um protocolo obsoleto.",
-   "remediation": "Use SSLContext.getInstance(\"TLS\") ou \"TLSv1.3\"/\"TLSv1.2\" e deixe a plataforma negociar.",
-   "falsePositives": "No Android, \"SSL\" pode negociar versões modernas; o risco real depende da configuração do socket.",
-   "references": ["https://developer.android.com/reference/javax/net/ssl/SSLContext"]}
+  {
+    "id": "tls-trustmanager-accepts-all",
+    "title": "TrustManager that does not validate certificates",
+    "severity": "high",
+    "category": "network",
+    "match": {
+      "kind": "override",
+      "roles": [
+        "trust_manager"
+      ],
+      "methods": [
+        "checkServerTrusted"
+      ],
+      "body": "empty"
+    },
+    "description": "checkServerTrusted with an empty body accepts any certificate, allowing interception (MITM) of TLS connections that use this TrustManager.",
+    "remediation": "Use the platform's default TrustManager and Network Security Config for pinning or extra CAs.",
+    "falsePositives": "Dead code or code used only in test builds. Check where the TrustManager is installed (SSLContext.init).",
+    "references": [
+      "https://developer.android.com/privacy-and-security/risks/unsafe-trustmanager",
+      "https://developer.android.com/privacy-and-security/security-ssl"
+    ]
+  },
+  {
+    "id": "tls-hostname-verifier-accepts-all",
+    "title": "HostnameVerifier that always returns true",
+    "severity": "high",
+    "category": "network",
+    "match": {
+      "kind": "override",
+      "roles": [
+        "hostname_verifier"
+      ],
+      "methods": [
+        "verify"
+      ],
+      "body": "returns-true"
+    },
+    "description": "Accepts any host name, defeating the TLS server identity check.",
+    "remediation": "Use the default HostnameVerifier (HttpsURLConnection.getDefaultHostnameVerifier()).",
+    "falsePositives": "Dead or test code.",
+    "references": [
+      "https://developer.android.com/privacy-and-security/risks/unsafe-hostname"
+    ]
+  },
+  {
+    "id": "tls-webview-ssl-error-proceed",
+    "title": "onReceivedSslError calls proceed()",
+    "severity": "high",
+    "category": "network",
+    "match": {
+      "kind": "override",
+      "roles": [
+        "webview_client"
+      ],
+      "methods": [
+        "onReceivedSslError"
+      ],
+      "calls": [
+        "proceed"
+      ]
+    },
+    "description": "The WebView keeps loading the page despite a certificate error, allowing MITM.",
+    "remediation": "Call handler.cancel() (the default behaviour) and do not ignore TLS errors.",
+    "falsePositives": "proceed() may sit behind a user confirmation or a debug flag; check the body.",
+    "references": [
+      "https://developer.android.com/reference/android/webkit/WebViewClient",
+      "https://developer.android.com/privacy-and-security/security-ssl"
+    ]
+  },
+  {
+    "id": "tls-legacy-protocol",
+    "title": "SSLContext with a legacy protocol",
+    "severity": "medium",
+    "category": "network",
+    "match": {
+      "kind": "call",
+      "types": [
+        "javax.net.ssl.SSLContext"
+      ],
+      "methods": [
+        "getInstance"
+      ],
+      "args": [
+        {
+          "index": 0,
+          "in": [
+            "SSL",
+            "SSLv2",
+            "SSLv3",
+            "TLSv1",
+            "TLSv1.1"
+          ],
+          "ignoreCase": true
+        }
+      ],
+      "importHints": [
+        "javax.net.ssl.SSLContext"
+      ]
+    },
+    "description": "Explicitly requests an obsolete protocol.",
+    "remediation": "Use SSLContext.getInstance(\"TLS\") or \"TLSv1.3\"/\"TLSv1.2\" and let the platform negotiate.",
+    "falsePositives": "On Android, \"SSL\" may negotiate modern versions; the real risk depends on the socket configuration.",
+    "references": [
+      "https://developer.android.com/reference/javax/net/ssl/SSLContext"
+    ]
+  }
 ]

@@ -8,15 +8,15 @@ import sys
 from . import __version__, diff, report, server
 
 COMMANDS = {
-    "serve": (server.add_arguments, server.serve, "Abre a interface local (padrão)"),
-    "diff": (diff.add_arguments, diff.run, "Compara a superfície de ataque de duas exportações"),
-    "export": (report.add_arguments, report.run, "Gera relatório (md) ou índice (json) de uma exportação"),
+    "serve": (server.add_arguments, server.serve, "Open the local UI (default)"),
+    "diff": (diff.add_arguments, diff.run, "Compare the attack surface of two exports"),
+    "export": (report.add_arguments, report.run, "Write a report (md) or the index (json) of an export"),
 }
 
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        prog="jadx-atlas", description="JADX Atlas — mapa local de classes Java exportadas pelo JADX"
+        prog="jadx-atlas", description="JADX Atlas: attack-surface map for Android apps, built on JADX output"
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", metavar="COMANDO")
@@ -29,7 +29,7 @@ def build_parser():
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
-    # Without a known subcommand, behave like the old `app.py`: serve the path (or the demo).
+    # Without a known subcommand, `jadx-atlas <path>` serves that path (or the demo).
     if not argv or (argv[0] not in COMMANDS and argv[0] not in {"-h", "--help", "--version"}):
         argv.insert(0, "serve")
     args = build_parser().parse_args(argv)

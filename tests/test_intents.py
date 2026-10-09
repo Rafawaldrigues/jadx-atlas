@@ -86,9 +86,7 @@ class IntentEdgeTests(unittest.TestCase):
             'void m() { sendBroadcast(new Intent("app.action.SYNC")); startActivity(new Intent("app.action.NOBODY")); }'
         )
         self.assertEqual(self.edges(p), {("A", "sends_action", "Sync", "sendBroadcast", "medium")})
-        self.assertEqual(
-            [u["reason"] for u in self.unresolved(p)], ["nenhum intent-filter do Manifest declara esta ação"]
-        )
+        self.assertEqual([u["reason"] for u in self.unresolved(p)], ["no manifest intent-filter declares this action"])
         edge = p.intent_edges[0]
         self.assertEqual((edge["action"], edge["component"]), ("app.action.SYNC", "app.Sync"))
 
@@ -106,7 +104,7 @@ class IntentEdgeTests(unittest.TestCase):
         )
         self.assertEqual(len(p.intent_edges), 2)
         reasons = sorted(u["reason"] for u in self.unresolved(p))
-        self.assertEqual(reasons, ["ação não resolvida (dinâmica)", "ação não resolvida (dinâmica)"])
+        self.assertEqual(reasons, ["action not resolved (dynamic)", "action not resolved (dynamic)"])
 
     def test_two_intents_in_one_method_do_not_mix(self):
         p = self.project(
@@ -125,7 +123,7 @@ class IntentEdgeTests(unittest.TestCase):
             "Intent build() { return null; }\nvoid m(Intent fromCaller) { startActivity(build()); startActivity(fromCaller); }"
         )
         self.assertEqual(p.intent_edges, [])
-        self.assertEqual([u["reason"] for u in self.unresolved(p)], ["Intent não rastreável dentro do método"] * 2)
+        self.assertEqual([u["reason"] for u in self.unresolved(p)], ["Intent not traceable within the method"] * 2)
 
     def test_pending_intent_and_register_receiver(self):
         p = self.project(

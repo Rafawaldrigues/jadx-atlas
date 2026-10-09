@@ -80,10 +80,12 @@ def measure(path, workers=None, cache=False):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--sizes", default="5000,20000,50000")
-    parser.add_argument("--path", help="Medir uma exportação existente em vez de projetos sintéticos")
-    parser.add_argument("--workers", type=int, help="Processos de indexação (padrão: automático)")
+    parser.add_argument("--path", help="Measure an existing export instead of synthetic projects")
+    parser.add_argument("--workers", type=int, help="Indexing processes (default: automatic)")
     parser.add_argument("--repeat", type=int, default=1)
-    parser.add_argument("--cache", action="store_true", help="Usar o cache em disco (a 2ª repetição mede o acerto)")
+    parser.add_argument(
+        "--cache", action="store_true", help="Use the disk cache (the 2nd repetition measures a cache hit)"
+    )
     parser.add_argument("--child", nargs=2, metavar=("PATH", "WORKERS"), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.child:

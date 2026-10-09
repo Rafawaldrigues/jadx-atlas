@@ -2,7 +2,7 @@
 
 Every derived fact carries its reason. Platform rules follow AOSP
 `com.android.internal.pm.pkg.component` (ParsedActivityUtils, ParsedServiceUtils,
-ParsedProviderUtils, ParsedMainComponentUtils); see docs/DECISIONS.md D-009.
+ParsedProviderUtils, ParsedMainComponentUtils); see docs/DESIGN.md, "Manifest and attack surface".
 """
 
 from __future__ import annotations
@@ -60,9 +60,9 @@ class _TreeBuilder(ContentHandler):
     def startElementNS(self, name, qname, attrs):
         self.count += 1
         if self.count > MAX_ELEMENTS:
-            raise ManifestError(f"XML com mais de {MAX_ELEMENTS} elementos; ignorado")
+            raise ManifestError(f"XML with more than {MAX_ELEMENTS} elements; ignored")
         if len(self.stack) >= MAX_DEPTH:
-            raise ManifestError(f"XML com mais de {MAX_DEPTH} níveis; ignorado")
+            raise ManifestError(f"XML nested more than {MAX_DEPTH} levels; ignored")
         line = self.locator.getLineNumber() if self.locator else None
         element = _Element(name[1], {key: value for key, value in attrs.items()}, line)
         if self.stack:
@@ -82,9 +82,9 @@ class _TreeBuilder(ContentHandler):
 
 def _parse_xml(data: bytes, limit: int, label: str):
     if len(data) > limit:
-        raise ManifestError(f"{label} maior que {limit // (1024 * 1024)} MiB; ignorado")
+        raise ManifestError(f"{label} larger than {limit // (1024 * 1024)} MiB; ignored")
     if data.startswith(AXML_MAGIC):
-        raise ManifestError(f"{label} está em formato binário (AXML); exporte com o JADX sem --no-res")
+        raise ManifestError(f"{label} is binary (AXML); export with JADX without --no-res")
     handler = _TreeBuilder()
     parser = defusedxml.sax.make_parser()
     parser.forbid_dtd, parser.forbid_entities, parser.forbid_external = True, True, True
@@ -95,22 +95,22 @@ def _parse_xml(data: bytes, limit: int, label: str):
         source.setByteStream(BytesIO(data))
         parser.parse(source)
     except DefusedXmlException as error:
-        raise ManifestError(f"{label} recusado: DTD ou entidades não são permitidos ({type(error).__name__})") from None
+        raise ManifestError(f"{label} refused: DTDs and entities are not allowed ({type(error).__name__})") from None
     except xml.sax.SAXException as error:
         cause = error.getException() if hasattr(error, "getException") else None
         if isinstance(cause, ManifestError):
             raise cause from None
-        raise ManifestError(f"{label} inválido: {error}") from None
+        raise ManifestError(f"{label} is invalid: {error}") from None
     if handler.root is None:
-        raise ManifestError(f"{label} vazio")
+        raise ManifestError(f"{label} is empty")
     return handler.root
 
 
 def _read_regular_file(path: Path, limit: int, label: str) -> bytes:
     if path.is_symlink() or not path.is_file():
-        raise ManifestError(f"{label} não é um arquivo regular (links simbólicos são ignorados)")
+        raise ManifestError(f"{label} is not a regular file (symbolic links are ignored)")
     if path.stat().st_size > limit:
-        raise ManifestError(f"{label} maior que {limit // (1024 * 1024)} MiB; ignorado")
+        raise ManifestError(f"{label} larger than {limit // (1024 * 1024)} MiB; ignored")
     return path.read_bytes()
 
 
@@ -119,7 +119,7 @@ def locate(root, explicit=None):
     if explicit:
         path = Path(explicit).expanduser()
         if not path.is_file() or path.is_symlink():
-            raise ManifestError(f"Manifest informado não encontrado ou não é um arquivo regular: {path}")
+            raise ManifestError(f"Manifest not found or not a regular file: {path}")
         return path.resolve()
     root = Path(root)
     for candidate in (
@@ -184,23 +184,23 @@ def _tristate(raw, default, resources, attribute):
     if raw is None:
         return default, False, None, None, None
     if raw in {"true", "false"}:
-        return raw == "true", True, "explícito", None, None
+        return raw == "true", True, "explicit", None, None
     if raw.startswith("@") and "/" in raw:
         kind, name = raw[1:].split("/", 1)
         kind = kind.split(":")[-1]
-        reason = f"depende do recurso {raw}"
+        reason = f"depends on resource {raw}"
         options = resources.get(name, {}) if kind == "bool" else {}
         if not options:
-            return "unknown", True, reason, None, f"recurso {raw} não encontrado em res/values*/bools.xml"
+            return "unknown", True, reason, None, f"resource {raw} not found in res/values*/bools.xml"
         default_value = options.get("default")
         variants = sorted({v for v in options.values() if v in {"true", "false"}})
         if default_value in {"true", "false"} and len(variants) == 1:
-            return "unknown", True, reason, default_value == "true", f"{raw} = {default_value} em res/values/bools.xml"
+            return "unknown", True, reason, default_value == "true", f"{raw} = {default_value} in res/values/bools.xml"
         detail = ", ".join(f"{q}={v}" for q, v in sorted(options.items()))
         # Several configurations disagree: the conservative (more exposed) reading is the potential one.
         guess = "true" in variants if attribute == "exported" else ("false" not in variants)
-        return "unknown", True, reason, guess, f"{raw} varia por configuração ({detail})"
-    return "unknown", True, f"valor inesperado {raw!r}", None, None
+        return "unknown", True, reason, guess, f"{raw} varies by configuration ({detail})"
+    return "unknown", True, f"unexpected value {raw!r}", None, None
 
 
 def effective_exported(component, raw, filters_counted, target_sdk, min_sdk, resources):
@@ -209,24 +209,24 @@ def effective_exported(component, raw, filters_counted, target_sdk, min_sdk, res
     value, explicit, reason, guess, guess_reason = _tristate(raw, None, resources, "exported")
     confidence = "high"
     if explicit and value != "unknown":
-        return {"exported": value, "exportedExplicit": True, "exportedReason": "explícito", "confidence": confidence}
+        return {"exported": value, "exportedExplicit": True, "exportedReason": "explicit", "confidence": confidence}
     sdk = target_sdk if target_sdk is not None else (min_sdk if min_sdk is not None else 1)
     if target_sdk is None:
         confidence = "medium"
     if kind == "provider":
         implicit = sdk < JELLY_BEAN_MR1
-        implicit_reason = f"padrão de provider com targetSdk {sdk} {'<' if implicit else '≥'} 17"
+        implicit_reason = f"provider default with targetSdk {sdk} {'<' if implicit else '≥'} 17"
     elif filters_counted:
         implicit = True
-        implicit_reason = f"implícito por intent-filter (targetSdk {sdk} < 31)"
+        implicit_reason = f"implicit through intent-filter (targetSdk {sdk} < 31)"
     else:
         implicit = False
-        implicit_reason = "sem intent-filter e sem exported"
+        implicit_reason = "no intent-filter and no exported attribute"
     if explicit:  # resource reference or unexpected literal
         if guess is None:
             guess, guess_reason = (
                 implicit,
-                f"{guess_reason or 'valor não resolvido'}; palpite pela regra implícita ({implicit_reason})",
+                f"{guess_reason or 'unresolved value'}; guess from the implicit rule ({implicit_reason})",
             )
         return {
             "exported": "unknown",
@@ -241,15 +241,15 @@ def effective_exported(component, raw, filters_counted, target_sdk, min_sdk, res
             "exported": "inconsistent",
             "exportedExplicit": False,
             "confidence": "low",
-            "exportedReason": f"intent-filter sem android:exported com targetSdk {sdk} ≥ 31: o Android 12+ recusa a instalação",
+            "exportedReason": f"intent-filter without android:exported and targetSdk {sdk} ≥ 31: Android 12+ refuses to install",
         }
         if min_sdk is not None and min_sdk < S:
             result.update(
                 exportedGuess=True,
-                exportedGuessReason=f"em dispositivos com API < 31 (minSdk {min_sdk}) seria exportado implicitamente",
+                exportedGuessReason=f"on devices with API < 31 (minSdk {min_sdk}) it would be implicitly exported",
             )
         else:
-            result.update(exportedGuess=None, exportedGuessReason="o app não instala em nenhuma versão suportada")
+            result.update(exportedGuess=None, exportedGuessReason="the app installs on no supported version")
         return result
     return {
         "exported": implicit,
@@ -325,16 +325,16 @@ def parse_manifest(data: bytes, resources=None, label="AndroidManifest.xml"):
     resources = resources or {}
     root = _parse_xml(data, MAX_MANIFEST_BYTES, label)
     if root.tag != "manifest":
-        raise ManifestError(f"{label}: elemento raiz <{root.tag}> não é <manifest>")
+        raise ManifestError(f"{label}: root element <{root.tag}> is not <manifest>")
     warnings = []
     package = root.get("package") or ""
     uses_sdk = (root.find("uses-sdk") or [None])[0]
     min_sdk = _sdk(uses_sdk.get("minSdkVersion")) if uses_sdk else None
     target_sdk = _sdk(uses_sdk.get("targetSdkVersion")) if uses_sdk else None
     if target_sdk is None and min_sdk is not None:
-        warnings.append(f"targetSdkVersion ausente; a plataforma usa minSdkVersion ({min_sdk})")
+        warnings.append(f"targetSdkVersion missing; the platform uses minSdkVersion ({min_sdk})")
     elif target_sdk is None:
-        warnings.append("uses-sdk ausente; regras de exportação aplicadas com confiança média")
+        warnings.append("uses-sdk missing; export rules applied with medium confidence")
     defined = [
         {"name": p.get("name"), "protectionLevel": p.get("protectionLevel") or "normal", "line": p.line}
         for p in root.find("permission")
@@ -344,7 +344,7 @@ def parse_manifest(data: bytes, resources=None, label="AndroidManifest.xml"):
     applications = root.find("application")
     app = applications[0] if applications else _Element("application", {}, None)
     if len(applications) > 1:
-        warnings.append("Mais de um <application>; apenas o primeiro foi analisado")
+        warnings.append("More than one <application>; only the first one was analysed")
     app_permission = app.get("permission")
     app_enabled, *_ = _tristate(app.get("enabled"), True, resources, "enabled")
 
@@ -380,11 +380,11 @@ def parse_manifest(data: bytes, resources=None, label="AndroidManifest.xml"):
             continue
         name = qualify(element.get("name"), package)
         if not name:
-            warnings.append(f"<{element.tag}> sem android:name na linha {element.line}; ignorado")
+            warnings.append(f"<{element.tag}> without android:name at line {element.line}; ignored")
             continue
         filters_xml = element.find("intent-filter")
         if len(filters_xml) > MAX_FILTERS:
-            warnings.append(f"{name}: {len(filters_xml)} intent-filters; apenas {MAX_FILTERS} analisados")
+            warnings.append(f"{name}: {len(filters_xml)} intent-filters; only {MAX_FILTERS} analysed")
             filters_xml = filters_xml[:MAX_FILTERS]
         filters = [_intent_filter(f) for f in filters_xml]
         # Activities and receivers drop filters without <action>; services keep them (failOnNoActions=false).
@@ -457,7 +457,7 @@ def parse_manifest(data: bytes, resources=None, label="AndroidManifest.xml"):
             deep_links(filters) if element.tag in {"activity", "activity-alias"} else ([], False)
         )
         if truncated:
-            warnings.append(f"{name}: mais de {MAX_DEEP_LINKS} combinações de deep link; lista truncada")
+            warnings.append(f"{name}: more than {MAX_DEEP_LINKS} deep link combinations; list truncated")
         component["exposure"] = exposure_rank(component)
         components.append(component)
     components.sort(key=lambda c: (c["exposure"], c["type"], c["name"]))

@@ -24,8 +24,8 @@ class ObfuscationMetricTests(unittest.TestCase):
 
     def test_low_and_high(self):
         low, high = self.level(0.0), self.level(0.9)
-        self.assertEqual((low["level"], low["shortNames"]), ("baixa", 0))
-        self.assertEqual(high["level"], "alta")
+        self.assertEqual((low["level"], low["shortNames"]), ("low", 0))
+        self.assertEqual(high["level"], "high")
         self.assertGreater(high["fraction"], 0.4)
 
 
@@ -116,10 +116,10 @@ class LibraryAndSearchTests(unittest.TestCase):
         def first(query):
             return [(r["id"], r["field"]) for r in self.project.search(query)["results"]][:1]
 
-        self.assertEqual(first("gson"), [("com.google.gson.Gson", "nome")])
+        self.assertEqual(first("gson"), [("com.google.gson.Gson", "name")])
         self.assertEqual(first("api.example"), [("com.google.app.Main", "string")])
-        self.assertEqual(first("crypto-ecb"), [("okhttp3.Call", "regra")])
-        self.assertEqual(first("activity"), [("com.google.app.Main", "papel")])
+        self.assertEqual(first("crypto-ecb"), [("okhttp3.Call", "rule")])
+        self.assertEqual(first("activity"), [("com.google.app.Main", "role")])
         with self.assertRaises(ValueError):
             self.project.search("a")
 
@@ -143,7 +143,7 @@ class AnnotationTests(unittest.TestCase):
     def test_refuses_data_dir_inside_analysed_folder(self):
         with tempfile.TemporaryDirectory() as analysed:
             with mock.patch.dict(os.environ, {"ATLAS_DATA_DIR": str(Path(analysed, "notes"))}):
-                with self.assertRaisesRegex(ValueError, "dentro da pasta analisada"):
+                with self.assertRaisesRegex(ValueError, "inside the analysed folder"):
                     Annotations(analysed)
 
     def test_limits(self):

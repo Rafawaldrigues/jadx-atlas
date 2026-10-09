@@ -45,7 +45,7 @@ interface View extends Root {}
 class Base<T> {}
 public class Example extends Base<String> implements View, Serializable {
     public static class Inner extends Example {}
-    public String name() { return "ação"; }
+    public String name() { return "naïve"; }
 }
 """,
                 encoding="utf-8",

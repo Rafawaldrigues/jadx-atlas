@@ -1,38 +1,176 @@
 [
-  {"id": "crypto-ecb-mode", "title": "Cifra em modo ECB (explícito ou implícito)", "severity": "medium", "category": "criptografia",
-   "match": {"kind": "call", "types": ["javax.crypto.Cipher"], "methods": ["getInstance"], "args": [{"index": 0, "regex": "(?i)^(AES|DES|DESede|Blowfish)$|/ECB/"}], "importHints": ["javax.crypto.Cipher"]},
-   "description": "\"AES\" sem modo usa ECB, que revela padrões do texto claro.",
-   "remediation": "Use AES/GCM/NoPadding com IV aleatório.",
-   "falsePositives": "ECB com um único bloco (por exemplo, para wrap de chave) pode ser aceitável; confira o uso.",
-   "references": ["https://developer.android.com/privacy-and-security/risks/broken-cryptographic-algorithm"]},
-  {"id": "crypto-weak-cipher", "title": "Algoritmo de cifra fraco (DES, 3DES, RC4, RC2)", "severity": "medium", "category": "criptografia",
-   "match": {"kind": "call", "types": ["javax.crypto.Cipher"], "methods": ["getInstance"], "args": [{"index": 0, "regex": "(?i)^(DES|DESede|TripleDES|RC4|ARCFOUR|RC2)(/|$)"}], "importHints": ["javax.crypto.Cipher"]},
-   "description": "Algoritmos quebrados ou obsoletos.",
-   "remediation": "Use AES-GCM ou ChaCha20-Poly1305.",
-   "falsePositives": "Compatibilidade com sistemas legados; o risco depende do dado protegido.",
-   "references": ["https://developer.android.com/privacy-and-security/risks/broken-cryptographic-algorithm"]},
-  {"id": "crypto-weak-hash", "title": "Hash fraco (MD5, SHA-1)", "severity": "low", "category": "criptografia",
-   "match": {"kind": "call", "types": ["java.security.MessageDigest"], "methods": ["getInstance"], "args": [{"index": 0, "regex": "(?i)^(MD2|MD4|MD5|SHA-?1|SHA)$"}], "importHints": ["java.security.MessageDigest"]},
-   "description": "MD5 e SHA-1 têm colisões práticas; inadequados para assinatura, integridade contra adversário ou senhas.",
-   "remediation": "Use SHA-256 ou superior; para senhas, um KDF (PBKDF2, scrypt, Argon2).",
-   "falsePositives": "Muito comum para checksums, chaves de cache ou identificadores não sensíveis.",
-   "references": ["https://developer.android.com/reference/java/security/MessageDigest", "https://developer.android.com/privacy-and-security/risks/broken-cryptographic-algorithm"]},
-  {"id": "crypto-hardcoded-key", "title": "Chave criptográfica construída com valor literal", "severity": "medium", "category": "criptografia",
-   "match": {"kind": "new", "types": ["javax.crypto.spec.SecretKeySpec"], "args": [{"index": 0, "literalish": true}], "importHints": ["javax.crypto.spec.SecretKeySpec"]},
-   "description": "A chave está no código do APK e pode ser extraída por qualquer pessoa.",
-   "remediation": "Gere chaves no Android Keystore; não embuta segredos no app.",
-   "falsePositives": "Chaves de ofuscação sem valor de segurança.",
-   "references": ["https://developer.android.com/privacy-and-security/risks/hardcoded-cryptographic-secrets"]},
-  {"id": "crypto-hardcoded-iv", "title": "IV construído com valor literal", "severity": "medium", "category": "criptografia",
-   "match": {"kind": "new", "types": ["javax.crypto.spec.IvParameterSpec"], "args": [{"index": 0, "literalish": true}], "importHints": ["javax.crypto.spec.IvParameterSpec"]},
-   "description": "IV fixo torna a cifra determinística (e é catastrófico em modos como GCM/CTR).",
-   "remediation": "Gere um IV aleatório por mensagem e transmita-o junto do texto cifrado.",
-   "falsePositives": "Raros.",
-   "references": ["https://developer.android.com/privacy-and-security/risks/hardcoded-cryptographic-secrets"]},
-  {"id": "crypto-fixed-seed", "title": "SecureRandom com semente fixa", "severity": "medium", "category": "criptografia",
-   "match": {"kind": "new", "types": ["java.security.SecureRandom"], "argCount": 1, "args": [{"index": 0, "literalish": true}], "importHints": ["java.security.SecureRandom"]},
-   "description": "Semente constante torna a sequência previsível.",
-   "remediation": "Use new SecureRandom() sem semente.",
-   "falsePositives": "Testes determinísticos.",
-   "references": ["https://developer.android.com/privacy-and-security/risks/weak-prng", "https://developer.android.com/reference/java/security/SecureRandom"]}
+  {
+    "id": "crypto-ecb-mode",
+    "title": "Cipher in ECB mode (explicit or implicit)",
+    "severity": "medium",
+    "category": "crypto",
+    "match": {
+      "kind": "call",
+      "types": [
+        "javax.crypto.Cipher"
+      ],
+      "methods": [
+        "getInstance"
+      ],
+      "args": [
+        {
+          "index": 0,
+          "regex": "(?i)^(AES|DES|DESede|Blowfish)$|/ECB/"
+        }
+      ],
+      "importHints": [
+        "javax.crypto.Cipher"
+      ]
+    },
+    "description": "\"AES\" without a mode uses ECB, which reveals patterns of the plaintext.",
+    "remediation": "Use AES/GCM/NoPadding with a random IV.",
+    "falsePositives": "ECB on a single block (for example key wrapping) may be acceptable; check the usage.",
+    "references": [
+      "https://developer.android.com/privacy-and-security/risks/broken-cryptographic-algorithm"
+    ]
+  },
+  {
+    "id": "crypto-weak-cipher",
+    "title": "Weak cipher algorithm (DES, 3DES, RC4, RC2)",
+    "severity": "medium",
+    "category": "crypto",
+    "match": {
+      "kind": "call",
+      "types": [
+        "javax.crypto.Cipher"
+      ],
+      "methods": [
+        "getInstance"
+      ],
+      "args": [
+        {
+          "index": 0,
+          "regex": "(?i)^(DES|DESede|TripleDES|RC4|ARCFOUR|RC2)(/|$)"
+        }
+      ],
+      "importHints": [
+        "javax.crypto.Cipher"
+      ]
+    },
+    "description": "Broken or obsolete algorithms.",
+    "remediation": "Use AES-GCM or ChaCha20-Poly1305.",
+    "falsePositives": "Compatibility with legacy systems; the risk depends on the protected data.",
+    "references": [
+      "https://developer.android.com/privacy-and-security/risks/broken-cryptographic-algorithm"
+    ]
+  },
+  {
+    "id": "crypto-weak-hash",
+    "title": "Weak hash (MD5, SHA-1)",
+    "severity": "low",
+    "category": "crypto",
+    "match": {
+      "kind": "call",
+      "types": [
+        "java.security.MessageDigest"
+      ],
+      "methods": [
+        "getInstance"
+      ],
+      "args": [
+        {
+          "index": 0,
+          "regex": "(?i)^(MD2|MD4|MD5|SHA-?1|SHA)$"
+        }
+      ],
+      "importHints": [
+        "java.security.MessageDigest"
+      ]
+    },
+    "description": "MD5 and SHA-1 have practical collisions; unsuitable for signatures, integrity against an adversary or passwords.",
+    "remediation": "Use SHA-256 or stronger; for passwords, a KDF (PBKDF2, scrypt, Argon2).",
+    "falsePositives": "Very common for checksums, cache keys or non-sensitive identifiers.",
+    "references": [
+      "https://developer.android.com/reference/java/security/MessageDigest",
+      "https://developer.android.com/privacy-and-security/risks/broken-cryptographic-algorithm"
+    ]
+  },
+  {
+    "id": "crypto-hardcoded-key",
+    "title": "Cryptographic key built from a literal value",
+    "severity": "medium",
+    "category": "crypto",
+    "match": {
+      "kind": "new",
+      "types": [
+        "javax.crypto.spec.SecretKeySpec"
+      ],
+      "args": [
+        {
+          "index": 0,
+          "literalish": true
+        }
+      ],
+      "importHints": [
+        "javax.crypto.spec.SecretKeySpec"
+      ]
+    },
+    "description": "The key is in the APK's code and anyone can extract it.",
+    "remediation": "Generate keys in the Android Keystore; do not embed secrets in the app.",
+    "falsePositives": "Obfuscation keys with no security value.",
+    "references": [
+      "https://developer.android.com/privacy-and-security/risks/hardcoded-cryptographic-secrets"
+    ]
+  },
+  {
+    "id": "crypto-hardcoded-iv",
+    "title": "IV built from a literal value",
+    "severity": "medium",
+    "category": "crypto",
+    "match": {
+      "kind": "new",
+      "types": [
+        "javax.crypto.spec.IvParameterSpec"
+      ],
+      "args": [
+        {
+          "index": 0,
+          "literalish": true
+        }
+      ],
+      "importHints": [
+        "javax.crypto.spec.IvParameterSpec"
+      ]
+    },
+    "description": "A fixed IV makes the cipher deterministic (and is catastrophic in modes such as GCM/CTR).",
+    "remediation": "Generate a random IV per message and send it along with the ciphertext.",
+    "falsePositives": "Rare.",
+    "references": [
+      "https://developer.android.com/privacy-and-security/risks/hardcoded-cryptographic-secrets"
+    ]
+  },
+  {
+    "id": "crypto-fixed-seed",
+    "title": "SecureRandom with a fixed seed",
+    "severity": "medium",
+    "category": "crypto",
+    "match": {
+      "kind": "new",
+      "types": [
+        "java.security.SecureRandom"
+      ],
+      "argCount": 1,
+      "args": [
+        {
+          "index": 0,
+          "literalish": true
+        }
+      ],
+      "importHints": [
+        "java.security.SecureRandom"
+      ]
+    },
+    "description": "A constant seed makes the sequence predictable.",
+    "remediation": "Use new SecureRandom() without a seed.",
+    "falsePositives": "Deterministic tests.",
+    "references": [
+      "https://developer.android.com/privacy-and-security/risks/weak-prng",
+      "https://developer.android.com/reference/java/security/SecureRandom"
+    ]
+  }
 ]

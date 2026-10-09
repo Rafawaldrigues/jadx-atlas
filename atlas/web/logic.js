@@ -9,11 +9,11 @@ export function isPotential(component) {
 export function isExposed(component) { return component.exported === true || isPotential(component); }
 
 export function exposureLabel(component) {
-  if (component.exported === true) return component.permission ? `exportado · exige ${component.permission} (${component.protectionLevel || 'unknown'})` : 'exportado · sem permissão';
-  if (isPotential(component)) return component.exported === 'inconsistent' ? 'potencialmente exportado · Manifest inconsistente' : 'potencialmente exportado · valor desconhecido';
-  if (component.exported === 'unknown') return 'exportação desconhecida';
-  if (component.exported === 'inconsistent') return 'Manifest inconsistente';
-  return 'não exportado';
+  if (component.exported === true) return component.permission ? `exported · requires ${component.permission} (${component.protectionLevel || 'unknown'})` : 'exported · no permission';
+  if (isPotential(component)) return component.exported === 'inconsistent' ? 'potentially exported · inconsistent manifest' : 'potentially exported · unknown value';
+  if (component.exported === 'unknown') return 'export unknown';
+  if (component.exported === 'inconsistent') return 'inconsistent manifest';
+  return 'not exported';
 }
 
 export function surfaceClass(node) {
@@ -130,7 +130,7 @@ export function selectGraph(project, nodes, options) {
 /** One node per package, edges counted between packages. */
 export function groupPackages(project, nodes, { layer = 'inheritance', keep = () => true } = {}) {
   const packages = new Map();
-  const keyOf = node => node.package || '(sem pacote)';
+  const keyOf = node => node.package || '(default package)';
   for (const node of project.nodes) {
     if (node.external || !keep(node)) continue;
     const key = keyOf(node);

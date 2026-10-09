@@ -3,7 +3,7 @@
 Order of trust: manifest facts (stable names) first, then findings, then the
 hierarchy of declared components. Obfuscated classes are renamed between
 builds; they are paired only by a structural fingerprint and always labelled
-"possível correspondência" with a confidence, never asserted as equivalent.
+"possible match" with a confidence, never asserted as equivalent.
 """
 
 from __future__ import annotations
@@ -18,12 +18,12 @@ import sys
 from .roles import framework
 
 FAIL_ON = {
-    "exported-added": "componente novo exportado ou exported false → true",
-    "permission-added": "uses-permission nova",
-    "component-added": "componente novo no Manifest",
-    "deeplink-added": "deep link novo",
-    "finding-added": "candidato a achado novo com severidade medium ou high",
-    "app-flag": "debuggable/allowBackup/usesCleartextTraffic/testOnly passou a true",
+    "exported-added": "new exported component or exported false → true",
+    "permission-added": "new uses-permission",
+    "component-added": "new component in the manifest",
+    "deeplink-added": "new deep link",
+    "finding-added": "new finding candidate with severity medium or high",
+    "app-flag": "debuggable/allowBackup/usesCleartextTraffic/testOnly became true",
 }
 APP_FLAGS = ("debuggable", "allowBackup", "usesCleartextTraffic", "testOnly")
 
@@ -80,7 +80,7 @@ def match_classes(old, new):
         pairs[old_ids[0]] = {
             "id": new_ids[0],
             "confidence": confidence,
-            "reason": f"impressão estrutural igual (tipo, papéis, pais externos{', constantes de string' if strings else ''})",
+            "reason": f"same structural fingerprint (kind, roles, external parents{', string constants' if strings else ''})",
         }
     return pairs
 
@@ -243,29 +243,29 @@ def _finding_summary(finding):
 
 
 def render_markdown(result, old_name, new_name):
-    lines = [f"# Diferença de superfície de ataque: {old_name} → {new_name}", ""]
+    lines = [f"# Attack-surface diff: {old_name} → {new_name}", ""]
     if result["empty"]:
         lines += [
-            "Nenhuma diferença na superfície de ataque, nos candidatos a achado ou na herança dos componentes.",
+            "No difference in the attack surface, finding candidates or component inheritance.",
             "",
         ]
         return "\n".join(lines)
     labels = {
-        "app": "Aplicativo",
-        "app-flag": "Atributo de <application>",
-        "permission-added": "Permissão nova",
-        "permission-removed": "Permissão removida",
-        "component-added": "Componente novo",
-        "component-removed": "Componente removido",
-        "exported-changed": "Exportação mudou",
-        "permission-changed": "Permissão do componente mudou",
-        "deeplink-added": "Deep link novo",
-        "deeplink-removed": "Deep link removido",
-        "filters-changed": "Ações dos intent-filters mudaram",
-        "manifest-presence": "Presença do Manifest",
+        "app": "App",
+        "app-flag": "<application> attribute",
+        "permission-added": "New permission",
+        "permission-removed": "Removed permission",
+        "component-added": "New component",
+        "component-removed": "Removed component",
+        "exported-changed": "Export changed",
+        "permission-changed": "Component permission changed",
+        "deeplink-added": "New deep link",
+        "deeplink-removed": "Removed deep link",
+        "filters-changed": "Intent-filter actions changed",
+        "manifest-presence": "Manifest presence",
     }
     if result["manifest"]:
-        lines += ["## Manifest", "", "| Mudança | Item | Antes | Depois |", "|---|---|---|---|"]
+        lines += ["## Manifest", "", "| Change | Item | Before | After |", "|---|---|---|---|"]
         for item in result["manifest"]:
             label = labels[item["kind"]] + (" **(false → true)**" if item.get("highlight") else "")
             name = item.get("name") or item.get("field") or ""
@@ -276,33 +276,33 @@ def render_markdown(result, old_name, new_name):
             lines.append(f"| {label} | `{name}` | {_cell(before)} | {_cell(after)} |")
         lines.append("")
     for title, key in (
-        ("Candidatos a achado novos", "findingsAdded"),
-        ("Candidatos a achado removidos", "findingsRemoved"),
+        ("New finding candidates", "findingsAdded"),
+        ("Removed finding candidates", "findingsRemoved"),
     ):
         if result[key]:
-            lines += [f"## {title}", "", "| Severidade | Regra | Classe | Linha | Trecho |", "|---|---|---|---|---|"]
+            lines += [f"## {title}", "", "| Severity | Rule | Class | Line | Snippet |", "|---|---|---|---|---|"]
             for f in result[key]:
                 lines.append(
                     f"| {f['severity']} ({f['confidence']}) | `{f['ruleId']}` | `{f['classId']}` | {f['line']} | `{_cell(f['snippet'])}` |"
                 )
             lines.append("")
     if result["hierarchy"]:
-        lines += ["## Herança dos componentes", ""]
+        lines += ["## Component inheritance", ""]
         for item in result["hierarchy"]:
             lines.append(f"- `{item['name']}`: {' → '.join(item['old'])} **⇒** {' → '.join(item['new'])}")
         lines.append("")
     if result["renames"]:
         lines += [
-            "## Possíveis correspondências de classes renomeadas",
+            "## Possible matches of renamed classes",
             "",
-            "Pareamento por impressão estrutural; **não** é prova de equivalência.",
+            "Paired by structural fingerprint; **not** proof of equivalence.",
             "",
         ]
         for item in result["renames"]:
-            lines.append(f"- `{item['old']}` → `{item['new']}` (confiança {item['confidence']}: {item['reason']})")
+            lines.append(f"- `{item['old']}` → `{item['new']}` (confidence {item['confidence']}: {item['reason']})")
         lines.append("")
     if result["triggers"]:
-        lines += ["Categorias para `--fail-on`: " + ", ".join(f"`{t}`" for t in result["triggers"]), ""]
+        lines += ["Categories for `--fail-on`: " + ", ".join(f"`{t}`" for t in result["triggers"]), ""]
     return "\n".join(lines)
 
 
@@ -312,14 +312,14 @@ def _cell(value):
 
 
 def add_arguments(parser):
-    parser.add_argument("old", help="Exportação do JADX da versão antiga (pasta sources ou a pasta de saída)")
-    parser.add_argument("new", help="Exportação do JADX da versão nova")
+    parser.add_argument("old", help="JADX export of the old version (the sources folder or the output folder)")
+    parser.add_argument("new", help="JADX export of the new version")
     parser.add_argument("--format", choices=("md", "json"), default="md")
-    parser.add_argument("--out", type=Path, help="Arquivo de saída (padrão: saída padrão)")
+    parser.add_argument("--out", type=Path, help="Output file (default: standard output)")
     parser.add_argument(
         "--fail-on",
         default="",
-        help="Categorias separadas por vírgula; código de saída 2 se houver: " + ", ".join(FAIL_ON),
+        help="Comma-separated categories; exit code 2 if any is present: " + ", ".join(FAIL_ON),
     )
 
 
@@ -330,7 +330,7 @@ def run(args, parser):
     wanted = {c.strip() for c in args.fail_on.split(",") if c.strip()}
     unknown = wanted - set(FAIL_ON)
     if unknown:
-        parser.error(f"categorias desconhecidas em --fail-on: {', '.join(sorted(unknown))}")
+        parser.error(f"unknown categories in --fail-on: {', '.join(sorted(unknown))}")
     try:
         old, new = Project(args.old), Project(args.new)
     except (ValueError, OSError) as error:

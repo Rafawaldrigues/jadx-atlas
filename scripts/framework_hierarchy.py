@@ -161,7 +161,7 @@ def jar_for(source, sdk: Path):
     CACHE.mkdir(parents=True, exist_ok=True)
     url = f"{MAVEN}/{group.replace('.', '/')}/{artifact}/{version}/{artifact}-{version}.aar"
     archive = CACHE / f"{artifact}-{version}.aar"
-    print(f"baixando {url}", file=sys.stderr)
+    print(f"downloading {url}", file=sys.stderr)
     urllib.request.urlretrieve(url, archive)  # noqa: S310 (fixed https URL, development only)
     with zipfile.ZipFile(archive) as aar, aar.open("classes.jar") as inner, target.open("wb") as out:
         shutil.copyfileobj(inner, out)
@@ -190,7 +190,7 @@ def javap(jar: Path, names, platform=False):
                 }
     missing = set(names) - set(found)
     if missing:
-        raise RuntimeError(f"javap não encontrou {sorted(missing)} em {jar.name}")
+        raise RuntimeError(f"javap did not find {sorted(missing)} in {jar.name}")
     return found
 
 
@@ -235,12 +235,12 @@ def main(argv=None):
         text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
         if args.check:
             same = path.exists() and path.read_text(encoding="utf-8") == text
-            print(f"{path.name} {'confere com' if same else 'DIFERE de'} android.jar/javap")
+            print(f"{path.name} {'matches' if same else 'DIFFERS FROM'} android.jar/javap")
             status |= 0 if same else 1
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
-        print(f"{len(data['types'])} tipos gravados em {path.relative_to(ROOT)}")
+        print(f"{len(data['types'])} types written to {path.relative_to(ROOT)}")
     return status
 
 

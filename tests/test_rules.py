@@ -235,9 +235,11 @@ class RuleCaseTests(unittest.TestCase):
         for rule_id, (positive, negative, confidence) in CASES.items():
             with self.subTest(rule=rule_id):
                 found = self.findings(positive, rule_id)
-                self.assertTrue(found, f"{rule_id}: positivo não encontrado")
+                self.assertTrue(found, f"{rule_id}: positive case not found")
                 self.assertEqual(found[0]["confidence"], confidence)
-                self.assertEqual(self.findings(negative, rule_id), [], f"{rule_id}: falso positivo no negativo")
+                self.assertEqual(
+                    self.findings(negative, rule_id), [], f"{rule_id}: false positive in the negative case"
+                )
 
     def test_rule_metadata_is_complete(self):
         for rule in load_rules():
@@ -350,9 +352,9 @@ class ConfidenceAndContextTests(RuleCaseTests):
     def test_secret_is_masked_everywhere(self):
         project = self.project({"app/A.java": java('String k = "AKIAQWERTYUIOPASDFGH";')})
         finding = next(f for f in project.findings if f["ruleId"] == "secret-known-format")
-        self.assertEqual(finding["secret"], "AKIA…[20 caracteres]")
+        self.assertEqual(finding["secret"], "AKIA…[20 chars]")
         self.assertNotIn("QWERTYUIOPASDFGH", str(project.payload))
-        self.assertIn("AKIA…[20 caracteres]", finding["snippet"])
+        self.assertIn("AKIA…[20 chars]", finding["snippet"])
 
     def test_untrusted_intent_input_only_in_exported_components(self):
         def make(exported):
@@ -406,7 +408,7 @@ class ConfidenceAndContextTests(RuleCaseTests):
     def test_collection_cost_grows_linearly(self):
         # Machine-independent tripwire: doubling the files must roughly double the time. A quadratic step
         # (like a list membership test over all files) makes the ratio explode. Absolute numbers live in
-        # docs/PERFORMANCE.md and scripts/bench.py.
+        # the README (Performance) and scripts/bench.py.
         body = "\n".join(
             f'void m{i}(WebSettings s, String x) {{ s.setJavaScriptEnabled(x != null); Cipher.getInstance("AES/GCM/NoPadding"); String u = "text {i}"; }}'
             for i in range(150)

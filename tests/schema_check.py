@@ -25,21 +25,21 @@ def errors(value, schema, root=None, where="$"):
     found = []
     if "oneOf" in schema:
         if sum(not errors(value, option, root, where) for option in schema["oneOf"]) != 1:
-            found.append(f"{where}: não casa exatamente um oneOf")
+            found.append(f"{where}: does not match exactly one oneOf")
         return found
     kinds = schema.get("type")
     if kinds and not any(_is(value, k) for k in ([kinds] if isinstance(kinds, str) else kinds)):
-        return [f"{where}: tipo {type(value).__name__} não é {kinds}"]
+        return [f"{where}: type {type(value).__name__} is not {kinds}"]
     if "enum" in schema and value not in schema["enum"]:
-        found.append(f"{where}: {value!r} fora de {schema['enum']}")
+        found.append(f"{where}: {value!r} not in {schema['enum']}")
     if "minimum" in schema and isinstance(value, (int, float)) and value < schema["minimum"]:
         found.append(f"{where}: {value} < {schema['minimum']}")
     if "maxLength" in schema and isinstance(value, str) and len(value) > schema["maxLength"]:
-        found.append(f"{where}: texto maior que {schema['maxLength']}")
+        found.append(f"{where}: text longer than {schema['maxLength']}")
     if isinstance(value, dict):
         for key in schema.get("required", []):
             if key not in value:
-                found.append(f"{where}: falta '{key}'")
+                found.append(f"{where}: missing '{key}'")
         for key, sub in schema.get("properties", {}).items():
             if key in value:
                 found.extend(errors(value[key], sub, root, f"{where}.{key}"))

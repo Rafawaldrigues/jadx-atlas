@@ -51,17 +51,17 @@ def find_sdk(explicit=None):
 def run(command):
     result = subprocess.run([str(c) for c in command], capture_output=True, text=True)
     if result.returncode:
-        raise RuntimeError(f"{command[0]} falhou:\n{result.stdout}{result.stderr}")
+        raise RuntimeError(f"{command[0]} failed:\n{result.stdout}{result.stderr}")
     return result.stdout
 
 
 def build(out: Path, sdk=None, obfuscate=False):
     found = find_sdk(sdk)
     if not found:
-        raise RuntimeError("Android SDK não encontrado (defina ANDROID_HOME ou use --sdk)")
+        raise RuntimeError("Android SDK not found (set ANDROID_HOME or use --sdk)")
     tools, android_jar = found
     if not shutil.which("javac"):
-        raise RuntimeError("javac não encontrado no PATH")
+        raise RuntimeError("javac not found on PATH")
     out.mkdir(parents=True, exist_ok=True)
     apk = out / ("atlas-testapp-r8.apk" if obfuscate else "atlas-testapp.apk")
     with tempfile.TemporaryDirectory() as directory:
@@ -116,11 +116,9 @@ def build(out: Path, sdk=None, obfuscate=False):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--sdk", help="Pasta do Android SDK")
+    parser.add_argument("--sdk", help="Android SDK folder")
     parser.add_argument("--out", type=Path, default=ROOT / "artifacts" / "testapp")
-    parser.add_argument(
-        "--obfuscate", action="store_true", help="Passar pelo R8 (renomeia classes fora dos componentes)"
-    )
+    parser.add_argument("--obfuscate", action="store_true", help="Run R8 (renames classes that are not components)")
     args = parser.parse_args(argv)
     try:
         summary = build(args.out, args.sdk, args.obfuscate)

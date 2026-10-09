@@ -38,7 +38,7 @@ def load_rules():
     seen = set()
     for rule in rules:
         if rule["id"] in seen:
-            raise ValueError(f"regra duplicada: {rule['id']}")
+            raise ValueError(f"duplicate rule: {rule['id']}")
         seen.add(rule["id"])
     return tuple(rules)
 
@@ -92,7 +92,7 @@ def shannon(value):
 
 def mask(secret):
     """First four characters and the length; the full value never enters the payload."""
-    return f"{secret[:4]}…[{len(secret)} caracteres]"
+    return f"{secret[:4]}…[{len(secret)} chars]"
 
 
 def mask_text(value, index):
@@ -371,7 +371,7 @@ class Evaluator:
                 rule,
                 CONFIDENCE["low"],
                 {
-                    "detail": f"entropia {shannon(value):.1f} bits/caractere",
+                    "detail": f"entropy {shannon(value):.1f} bits/char",
                     "secret": mask(value),
                     "_secretValue": value,
                 },

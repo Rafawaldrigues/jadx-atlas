@@ -32,7 +32,7 @@ SCHEMA = json.loads(
 )
 GOLDEN = Path(__file__).resolve().parent / "golden" / "demo-report.md"
 FIXED = "2026-01-01T00:00:00+00:00"
-DEMO = BASE / "examples" / "pedidos"
+DEMO = BASE / "examples" / "orders"
 
 
 class ReportTests(unittest.TestCase):
@@ -67,15 +67,15 @@ class ReportTests(unittest.TestCase):
         if os.environ.get("ATLAS_UPDATE_GOLDEN") == "1":
             GOLDEN.write_text(text, encoding="utf-8")
         self.assertEqual(
-            text, GOLDEN.read_text(encoding="utf-8"), "rode com ATLAS_UPDATE_GOLDEN=1 se a mudança for intencional"
+            text, GOLDEN.read_text(encoding="utf-8"), "run with ATLAS_UPDATE_GOLDEN=1 if the change is intended"
         )
         for section in (
-            "## Rastreabilidade",
-            "## Superfície de ataque",
-            "## Candidatos a achado",
-            "## Caminhos possíveis",
-            "## Metodologia e limitações",
-            "<!-- PREENCHER",
+            "## Traceability",
+            "## Attack surface",
+            "## Finding candidates",
+            "## Possible paths",
+            "## Methodology and limitations",
+            "<!-- TODO",
         ):
             self.assertIn(section, text)
 
@@ -85,11 +85,11 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(first, second)
         data = to_json({k: v for k, v in first.items() if k != "rules"}) + render_markdown(first)
         for secret in (
-            "br.exemplo.pedidos",
-            "PedidoRepository",
+            "com.example.orders",
+            "OrderRepository",
             "CheckoutActivity",
-            "api.pedidos.example",
-            "pagamento.example",
+            "api.orders.example",
+            "payment.example",
         ):
             self.assertNotIn(secret, data)
         self.assertIn("pkg01", data)
@@ -107,9 +107,9 @@ class SecretsAndApkTests(unittest.TestCase):
             self.assertNotIn("QWERTYUIOPASDFGH", masked)
             included = build(project, generated=FIXED, include_secrets=True)
             self.assertIn("AKIAQWERTYUIOPASDFGH", render_markdown(included))
-            self.assertEqual(included["report"]["secrets"], "incluídos (--include-secrets)")
+            self.assertEqual(included["report"]["secrets"], "included (--include-secrets)")
 
-    @unittest.skipUnless(can_symlink(), "o sistema não permite criar links simbólicos")
+    @unittest.skipUnless(can_symlink(), "this system cannot create symbolic links")
     def test_apk_hash_only(self):
         with tempfile.TemporaryDirectory() as directory:
             apk = Path(directory, "app.apk")
@@ -131,7 +131,7 @@ class SecretsAndApkTests(unittest.TestCase):
             buffer = io.StringIO()
             with redirect_stdout(buffer):
                 main(["export", str(DEMO), "--anonymize"])
-            self.assertIn("projeto anonimizado", buffer.getvalue())
+            self.assertIn("anonymized project", buffer.getvalue())
 
 
 if __name__ == "__main__":

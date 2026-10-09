@@ -79,7 +79,7 @@ class ParallelAndCacheTests(unittest.TestCase):
 
     def test_cache_inside_analysed_folder_is_refused(self):
         with mock.patch.dict(os.environ, {"ATLAS_CACHE_DIR": str(self.root / "cache")}):
-            with self.assertRaisesRegex(ValueError, "dentro da pasta analisada"):
+            with self.assertRaisesRegex(ValueError, "inside the analysed folder"):
                 Project(self.root, cache=True)
 
     def test_cancel_during_parallel_parse(self):

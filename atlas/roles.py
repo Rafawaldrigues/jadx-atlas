@@ -41,7 +41,7 @@ def parent_links(nodes, edges):
             rank = CONFIDENCE["medium"] if len(candidates) <= 2 else CONFIDENCE["low"]
             for candidate in candidates:
                 links.setdefault(edge["source"], []).append(
-                    (candidate, rank, f"{edge['kind']} (ambíguo: {len(candidates)} candidatos)")
+                    (candidate, rank, f"{edge['kind']} (ambiguous: {len(candidates)} candidates)")
                 )
     for type_id, info in framework()["types"].items():
         # A class shipped in the sources (e.g. bundled androidx) is described by its own edges.

@@ -105,8 +105,8 @@ class DiffTests(unittest.TestCase):
             [(r["old"], r["new"], r["confidence"]) for r in self.result["renames"]], [("o.a", "o.b", "medium")]
         )
         text = render_markdown(self.result, "v1", "v2")
-        self.assertIn("Possíveis correspondências", text)
-        self.assertIn("não** é prova de equivalência", text)
+        self.assertIn("Possible matches", text)
+        self.assertIn("not** proof of equivalence", text)
         self.assertIn("(false → true)", text)
 
     def run_cli(self, *args):
@@ -132,10 +132,10 @@ class DiffTests(unittest.TestCase):
             self.roots["old"], self.roots["old"], "--fail-on", ",".join(["exported-added", "finding-added"])
         )
         self.assertEqual(code, 0)
-        self.assertIn("Nenhuma diferença", out)
+        self.assertIn("No difference", out)
         report = Path(self.directory.name, "report.md")
         self.assertEqual(self.run_cli(self.roots["new"], self.roots["new"], "--out", report)[0], 0)
-        self.assertIn("Nenhuma diferença", report.read_text(encoding="utf-8"))
+        self.assertIn("No difference", report.read_text(encoding="utf-8"))
 
 
 class CompareServerTests(unittest.TestCase):
@@ -183,7 +183,7 @@ class CompareServerTests(unittest.TestCase):
                 body = json.load(response)
             self.assertIn("exported-added", body["triggers"])
             with urlopen(base + "/api/diff?otherIs=old&format=md") as response:
-                self.assertIn("# Diferença", json.load(response)["markdown"])
+                self.assertIn("# Attack-surface diff", json.load(response)["markdown"])
             with urlopen(base + "/api/diff?otherIs=new") as response:
                 self.assertIn("component-removed", {i["kind"] for i in json.load(response)["manifest"]})
         finally:

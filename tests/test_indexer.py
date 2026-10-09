@@ -154,23 +154,23 @@ class IndexerTests(unittest.TestCase):
         self.assertEqual({n["id"] for n in classes}, {"A", "A.Member"})
 
     def test_utf8_source_locations_and_changed_file_detection(self):
-        p = self.project({"A.java": "// ação e coração\npackage p;\n\npublic class A {}\n"})
+        p = self.project({"A.java": "// naïve café façade\npackage p;\n\npublic class A {}\n"})
         source = p.source("p.A")
         self.assertEqual(source["line"], 4)
-        self.assertIn("coração", source["code"])
+        self.assertIn("façade", source["code"])
         (p.root / "A.java").write_text("class Changed {}", encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "mudou"):
+        with self.assertRaisesRegex(ValueError, "changed"):
             p.source("p.A")
 
     def test_duplicate_types_reported_and_first_retained(self):
         p = self.project({"A.java": "package p; class A {}", "B.java": "package p; class A extends Missing {}"})
         self.assertEqual(p.nodes["p.A"]["path"], "A.java")
         self.assertEqual(len(p.edges), 0)
-        self.assertTrue(any("duplicada" in w["message"] for w in p.payload["warnings"]))
+        self.assertTrue(any("Duplicate declaration" in w["message"] for w in p.payload["warnings"]))
 
     def test_empty_directory_is_actionable_error(self):
         with tempfile.TemporaryDirectory() as root:
-            with self.assertRaisesRegex(ValueError, "Nenhum arquivo"):
+            with self.assertRaisesRegex(ValueError, "No .java files"):
                 Project(root)
 
     def test_cancelled_index(self):
@@ -178,7 +178,7 @@ class IndexerTests(unittest.TestCase):
             with self.assertRaises(Cancelled):
                 Project(root, cancelled=lambda: True)
 
-    @unittest.skipUnless(can_symlink(), "o sistema não permite criar links simbólicos")
+    @unittest.skipUnless(can_symlink(), "this system cannot create symbolic links")
     def test_oversized_and_symlinked_sources_are_skipped(self):
         p = self.project({"A.java": "class A {}"})
         (p.root / "Link.java").symlink_to(p.root / "A.java")
@@ -189,9 +189,9 @@ class IndexerTests(unittest.TestCase):
         self.assertEqual(len(p.payload["warnings"]), 2)
 
     def test_realistic_obfuscated_dollar_names_and_unicode(self):
-        p = self.project({"a.java": "package p123a; class a$b {} class c extends a$b {} class Ação extends c {}"})
+        p = self.project({"a.java": "package p123a; class a$b {} class c extends a$b {} class Façade extends c {}"})
         self.assertIn(("p123a.c", "extends", "p123a.a$b"), self.edges(p))
-        self.assertIn(("p123a.Ação", "extends", "p123a.c"), self.edges(p))
+        self.assertIn(("p123a.Façade", "extends", "p123a.c"), self.edges(p))
 
 
 if __name__ == "__main__":

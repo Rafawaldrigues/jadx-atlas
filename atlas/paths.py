@@ -12,7 +12,7 @@ import time
 
 KIND_ORDER = {"launches": 0, "sends_action": 1, "registers_receiver": 2, "uses": 3, "extends": 4}
 CONFIDENCE = {"high": 3, "medium": 2, "low": 1}
-NOTE = "caminho possível; não é prova de alcançabilidade nem de exploração"
+NOTE = "possible path; not proof of reachability or exploitability"
 LIMITS = {"maxDepth": 6, "maxPathsPerTarget": 3, "maxPaths": 30, "maxSeconds": 2.0, "maxExpansionsPerNode": 3}
 
 
@@ -50,7 +50,7 @@ def find_paths(graph, entry, targets, kinds, limits=None, clock=time.perf_counte
     queue = deque([(entry, ())])
     while queue:
         if clock() - started > limits["maxSeconds"]:
-            truncated = "tempo"
+            truncated = "time"
             break
         node, steps = queue.popleft()
         if node in targets and steps:
@@ -62,7 +62,7 @@ def find_paths(graph, entry, targets, kinds, limits=None, clock=time.perf_counte
                 confidence = min((s["confidence"] for s in steps), key=lambda c: CONFIDENCE[c])
                 found.append({"target": node, "length": len(steps), "confidence": confidence, "steps": list(steps)})
                 if len(found) >= limits["maxPaths"]:
-                    truncated = "total de caminhos"
+                    truncated = "total paths"
                     break
             continue  # a target ends the path (the next sensitive class gets its own path)
         if len(steps) >= limits["maxDepth"]:
@@ -82,9 +82,9 @@ def find_paths(graph, entry, targets, kinds, limits=None, clock=time.perf_counte
 
 def as_text(result, files):
     """Plain-text rendering for the "copy path" button and reports."""
-    lines = [f"Entrada: {result['entry']} ({NOTE})"]
+    lines = [f"Entry: {result['entry']} ({NOTE})"]
     for index, path in enumerate(result["paths"], 1):
-        lines.append(f"\nCaminho {index} → {path['target']} (confiança {path['confidence']}, {path['length']} passos)")
+        lines.append(f"\nPath {index} → {path['target']} (confidence {path['confidence']}, {path['length']} steps)")
         for step in path["steps"]:
             where = f"{files.get(step['from'], '?')}:{step['line']}" if step["line"] else files.get(step["from"], "?")
             lines.append(f"  {step['from']} --{step['kind']} ({step['via']})--> {step['to']}   [{where}]")

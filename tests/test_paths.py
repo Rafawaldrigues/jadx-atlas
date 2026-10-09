@@ -92,7 +92,7 @@ class FindPathsTests(unittest.TestCase):
         self.assertEqual(len(find_paths(g, "E", ["T"], ALL, {"maxPathsPerTarget": 4})["paths"]), 4)
         ticks = iter(range(100))
         result = find_paths(g, "E", ["T"], ALL, {"maxSeconds": 2}, clock=lambda: next(ticks))
-        self.assertEqual(result["truncated"], "tempo")
+        self.assertEqual(result["truncated"], "time")
 
 
 NS = 'xmlns:android="http://schemas.android.com/apk/res/android"'
@@ -131,7 +131,7 @@ class ProjectPathTests(unittest.TestCase):
         self.assertIn(["app.Entry", "app.Middle", "app.Crypto"], routes(result))
         launch = next(s for p in result["paths"] for s in p["steps"] if s["kind"] == "launches")
         self.assertEqual((launch["file"], launch["line"], launch["via"]), ("app/Entry.java", 4, "startActivity"))
-        self.assertIn("não é prova", result["text"])
+        self.assertIn("not proof", result["text"])
         without = self.project.paths("app.Entry", inheritance=False)
         self.assertEqual(routes(without), [["app.Entry", "app.Middle", "app.Crypto"]])
 
