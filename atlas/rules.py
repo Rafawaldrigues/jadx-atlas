@@ -370,7 +370,11 @@ class Evaluator:
             yield (
                 rule,
                 CONFIDENCE["low"],
-                {"detail": f"entropia {shannon(value):.1f} bits/caractere", "secret": mask(value)},
+                {
+                    "detail": f"entropia {shannon(value):.1f} bits/caractere",
+                    "secret": mask(value),
+                    "_secretValue": value,
+                },
             )
             return
         for name, pattern in rule["_patterns"]:
@@ -380,6 +384,7 @@ class Evaluator:
             extra = {"detail": name}
             if match.get("mask"):
                 extra["secret"] = mask(found.group())
+                extra["_secretValue"] = found.group()  # moved out of the finding by Project; never in the payload
             else:
                 extra["value"] = value[:SNIPPET]
             yield rule, CONFIDENCE["high"] if match.get("mask") else CONFIDENCE["medium"], extra

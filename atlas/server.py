@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlparse
 import webbrowser
 
 from . import diff as diff_module
+from . import report as report_module
 from .indexer import Cancelled, Project
 
 # Package directory: holds web/ (static UI) and examples/ (demo project).
@@ -132,6 +133,14 @@ class Handler(SimpleHTTPRequestHandler):
                     raise ValueError("Importe um projeto primeiro.")
                 class_id = parse_qs(url.query).get("id", [""])[0]
                 return self.json(self.state.project.source(class_id))
+            if url.path == "/api/report":
+                if not self.state.project:
+                    raise ValueError("Importe um projeto primeiro.")
+                query = parse_qs(url.query)
+                built = report_module.build(self.state.project, anonymize=query.get("anonymize", ["0"])[0] == "1")
+                if query.get("format", ["md"])[0] == "json":
+                    return self.json(built)
+                return self.json({"markdown": report_module.render_markdown(built)})
             if url.path == "/api/diff":
                 with self.state.lock:
                     current, other = self.state.project, self.state.compare

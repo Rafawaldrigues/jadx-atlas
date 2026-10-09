@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Rafawaldrigues/JADX-maping/docs/schema/atlas-index.schema.json",
+  "title": "JADX Atlas index / report (schemaVersion 6)",
+  "description": "Output of `jadx-atlas export --format json` and of the UI 'Exportar mapa'. Additive changes only; `schemaVersion` increases when fields are added. The absolute import path is never exported.",
+  "type": "object",
+  "required": ["schemaVersion", "report", "name", "demo", "nodes", "edges", "warnings", "stats", "manifest", "findings", "rules", "intentEdges", "pathEntries", "pathTargets", "paths"],
+  "properties": {
+    "schemaVersion": {"type": "integer", "minimum": 6},
+    "report": {
+      "type": "object",
+      "required": ["tool", "generated", "manifestSha256", "apkSha256", "secrets", "anonymized", "note"],
+      "properties": {
+        "tool": {"type": "string"},
+        "generated": {"type": "string"},
+        "manifestSha256": {"type": ["string", "null"]},
+        "apkSha256": {"type": ["string", "null"]},
+        "secrets": {"type": "string"},
+        "anonymized": {"type": "boolean"},
+        "note": {"type": "string"}
+      }
+    },
+    "name": {"type": "string"},
+    "demo": {"type": "boolean"},
+    "nodes": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+    "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}},
+    "warnings": {"type": "array", "items": {"type": "object", "required": ["path", "message"], "properties": {"path": {"type": ["string", "null"]}, "message": {"type": "string"}}}},
+    "stats": {"type": "object", "required": ["files", "types", "relations", "manifest", "findings"], "properties": {"manifest": {"enum": ["found", "missing", "invalid"]}}},
+    "manifest": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/manifest"}]},
+    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "rules": {"type": "array", "items": {"type": "object", "required": ["id", "title", "severity", "category", "description", "remediation", "falsePositives", "references"]}},
+    "intentEdges": {"type": "array", "items": {"$ref": "#/$defs/intentEdge"}},
+    "pathEntries": {"type": "array", "items": {"type": "object", "required": ["id", "reasons"], "properties": {"id": {"type": "string"}, "reasons": {"type": "array", "items": {"type": "string"}}}}},
+    "pathTargets": {"type": "array", "items": {"type": "string"}},
+    "paths": {"type": "array", "items": {"$ref": "#/$defs/path"}}
+  },
+  "$defs": {
+    "confidence": {"enum": ["high", "medium", "low"]},
+    "severity": {"enum": ["info", "low", "medium", "high"]},
+    "node": {
+      "type": "object",
+      "required": ["id", "name", "package", "kind", "external"],
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "package": {"type": "string"},
+        "kind": {"enum": ["class", "interface", "enum", "record", "annotation"]},
+        "external": {"type": "boolean"},
+        "path": {"type": ["string", "null"]},
+        "line": {"type": ["integer", "null"]},
+        "resolution": {"enum": ["resolved", "external", "ambiguous", "unresolved"]},
+        "roles": {"type": "array", "items": {"type": "object", "required": ["role", "label", "confidence", "path", "via"], "properties": {"confidence": {"$ref": "#/$defs/confidence"}, "path": {"type": "array", "items": {"type": "string"}}}}},
+        "component": {"type": "object", "required": ["type", "exported", "exportedReason"]},
+        "findings": {"type": "object"}
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["id", "source", "target", "kind", "reference", "resolution"],
+      "properties": {"kind": {"enum": ["extends", "implements"]}, "resolution": {"enum": ["resolved", "external", "ambiguous", "unresolved"]}}
+    },
+    "manifest": {
+      "type": "object",
+      "required": ["sha256", "package", "minSdk", "targetSdk", "usesPermissions", "definedPermissions", "application", "components", "warnings", "path"],
+      "properties": {
+        "components": {"type": "array", "items": {"type": "object", "required": ["type", "name", "classId", "class", "exported", "exportedReason", "confidence", "permission", "intentFilters", "deepLinks", "exposure"],
+          "properties": {"type": {"enum": ["activity", "activity-alias", "service", "receiver", "provider"]}, "class": {"type": ["string", "null"]}}}}
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["ruleId", "severity", "category", "confidence", "classId", "file", "line", "endLine", "snippet", "inAnonymous"],
+      "properties": {
+        "severity": {"$ref": "#/$defs/severity"},
+        "confidence": {"$ref": "#/$defs/confidence"},
+        "line": {"type": "integer"},
+        "snippet": {"type": "string", "maxLength": 160},
+        "inAnonymous": {"type": "boolean"},
+        "secret": {"type": "string"}
+      }
+    },
+    "intentEdge": {
+      "type": "object",
+      "required": ["id", "source", "target", "kind", "via", "line", "confidence"],
+      "properties": {"kind": {"enum": ["launches", "sends_action", "registers_receiver"]}, "confidence": {"$ref": "#/$defs/confidence"}}
+    },
+    "path": {
+      "type": "object",
+      "required": ["entry", "target", "length", "confidence", "steps"],
+      "properties": {"steps": {"type": "array", "items": {"type": "object", "required": ["from", "to", "kind", "via", "line", "confidence", "file"]}}}
+    }
+  }
+}

@@ -323,6 +323,7 @@ class Project:
         role_counts = roles_module.assign(self.nodes, self.edges)
         manifest_data, manifest_status = self._attach_manifest(manifest, warnings)
         components = manifest_data["components"] if manifest_data else []
+        self.secret_values = {}
         self.findings = self._evaluate_rules() if findings else []
         self.intent_edges = self._intent_edges(manifest_data) if findings else []
         self.flow = self._flow_graph() if findings else paths_module.FlowGraph()
@@ -687,6 +688,10 @@ class Project:
                 found.extend(results)
         rank = {severity: index for index, severity in enumerate(rules_module.SEVERITIES)}
         found.sort(key=lambda f: (-rank[f["severity"]], f["classId"], f["line"], f["ruleId"]))
+        # Full secret values stay in memory only, for `export --include-secrets`; the payload keeps the mask.
+        for index, finding in enumerate(found):
+            if "_secretValue" in finding:
+                self.secret_values[index] = finding.pop("_secretValue")
         return found
 
     def _check_roles(self, data, warnings):
