@@ -13,8 +13,6 @@ confidence and the file and line that justify it.
 For security researchers, pentesters and bug bounty hunters who already use JADX and want to get from
 "decompiled" to "where do I look first" faster.
 
-![JADX Atlas showing the demo app: package explorer, inheritance map and finding candidates](docs/images/screenshot.png)
-
 > **Responsible use:** only analyse apps you are authorised to analyse. See [SECURITY.md](SECURITY.md).
 
 ## Quick start
