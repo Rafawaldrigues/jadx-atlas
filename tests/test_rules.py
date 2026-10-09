@@ -403,25 +403,32 @@ class ConfidenceAndContextTests(RuleCaseTests):
         project = Project(directory.name, findings=False)
         self.assertEqual(project.findings, [])
 
-    def test_collection_cost_is_bounded(self):
+    def test_collection_cost_grows_linearly(self):
+        # Machine-independent tripwire: doubling the files must roughly double the time. A quadratic step
+        # (like a list membership test over all files) makes the ratio explode. Absolute numbers live in
+        # docs/PERFORMANCE.md and scripts/bench.py.
         body = "\n".join(
             f'void m{i}(WebSettings s, String x) {{ s.setJavaScriptEnabled(x != null); Cipher.getInstance("AES/GCM/NoPadding"); String u = "text {i}"; }}'
-            for i in range(300)
+            for i in range(150)
         )
         source = java(body, "android.webkit.WebSettings javax.crypto.Cipher")
-        directory = tempfile.TemporaryDirectory()
-        self.addCleanup(directory.cleanup)
-        for index in range(40):
-            Path(directory.name, f"A{index}.java").write_text(
-                source.replace("class A", f"class A{index}"), encoding="utf-8"
-            )
-        started = time.perf_counter()
-        Project(directory.name, findings=False)
-        without = time.perf_counter() - started
-        started = time.perf_counter()
-        Project(directory.name)
-        with_rules = time.perf_counter() - started
-        self.assertLess(with_rules, max(without * 3, without + 1.0), (without, with_rules))
+
+        def timed(count):
+            directory = tempfile.TemporaryDirectory()
+            self.addCleanup(directory.cleanup)
+            for index in range(count):
+                Path(directory.name, f"A{index}.java").write_text(
+                    source.replace("class A", f"class A{index}"), encoding="utf-8"
+                )
+            best = float("inf")
+            for _ in range(2):  # best of two smooths out a busy machine
+                started = time.perf_counter()
+                Project(directory.name, workers=1)
+                best = min(best, time.perf_counter() - started)
+            return best
+
+        small, large = timed(20), timed(40)
+        self.assertLess(large, small * 3, (small, large))
 
 
 if __name__ == "__main__":
