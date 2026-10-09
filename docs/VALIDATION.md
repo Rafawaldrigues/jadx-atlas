@@ -23,7 +23,7 @@
 | provider `.DataProvider` | true, readPermission READ_DATA | 0 | exportado; **escrita sem permissão** | `true`, sem permissão efetiva (lado mais fraco) | ✓ |
 | provider `.LegacyProvider` | ausente | 0 | não exportado (targetSdk 30 ≥ 17) | `false` | ✓ |
 
-**Resultado:** 12 de 12 componentes conferem. `exported=true` confirmados: 8; potencialmente exportados: 1 (`ResourceActivity`, valor real `true`, então o palpite estava certo). O teste `tests/test_jadx_integration.py::ApkManifestIntegrationTests` refaz esta conferência automaticamente quando javac, JADX e Android SDK estão disponíveis.
+**Resultado:** 12 de 12 componentes conferem. (Na Fase 5 o app ganhou um 13º componente, `PaymentActivity`, não exportado, para a cadeia plantada; o teste automático cobre os 13.) `exported=true` confirmados: 8; potencialmente exportados: 1 (`ResourceActivity`, valor real `true`, então o palpite estava certo). O teste `tests/test_jadx_integration.py::ApkManifestIntegrationTests` refaz esta conferência automaticamente quando javac, JADX e Android SDK estão disponíveis.
 
 **Divergências e observações:**
 - O aapt2 mostra nomes relativos (`.MainActivity`), e o JADX os expande (`br.atlas.testapp.MainActivity`), exceto em `activity-alias`, onde o nome e o `targetActivity` continuam relativos. O Atlas normaliza os dois casos.
@@ -64,3 +64,27 @@ A conferência automática fica em `tests/test_jadx_integration.py::ApkManifestI
 Antes dos ajustes da D-016, a mesma base gerava 3 falsos positivos de criptografia (`getInstance(...)` implícito em `FirebaseMessaging`) e 9 de entropia (strings `@Metadata` do Kotlin). Os dois casos ganharam testes de regressão.
 
 **Desempenho:** 1,0 s sem regras contra 1,44 a 1,56 s com regras (+45 a 55%) nesses 2.032 tipos; detalhes em docs/PERFORMANCE.md.
+
+## Fase 5 · Caminhos da entrada até o ponto sensível (2026-10-09)
+
+**Alvo:** o mesmo app sintético, agora com a cadeia plantada da D-022. SHA-256 do build: `9ffbde85b678e6fa9f1f54d9691b1624fe20a35dc67793bd8141d0ed17f0541a`. Exportado com JADX 1.5.6.
+
+**Resultado do Atlas** (aba Caminhos, entrada `DeepLinkActivity`, alvo padrão):
+
+```
+Caminho 1 → br.atlas.testapp.InsecureClient (confiança high, 2 passos)
+  DeepLinkActivity --launches (startActivity)--> PaymentActivity   [br/atlas/testapp/DeepLinkActivity.java:15]
+  PaymentActivity --uses (referência de tipo)--> InsecureClient    [br/atlas/testapp/PaymentActivity.java:10]
+```
+
+O achado `tls-trustmanager-accepts-all` (high, `inAnonymous: true`) fica em `InsecureClient`, e as 9 entradas padrão vêm do Manifest.
+
+**Comparação com a busca manual no JADX** (contagem de ações de navegação, não tempo medido com usuários):
+
+| Abordagem | Ações até ligar entrada exposta → ponto vulnerável |
+|---|---|
+| JADX GUI, partindo do problema | 1) buscar `checkServerTrusted`; 2) abrir `InsecureClient`; 3) "find usage" de `InsecureClient`; 4) abrir `PaymentActivity`; 5) "find usage" de `PaymentActivity`; 6) abrir `DeepLinkActivity`; 7) abrir o `AndroidManifest.xml` e confirmar que ela é exportada e tem deep link (e que `PaymentActivity` não é). **7 ações**, e isso só depois de saber o que procurar. |
+| JADX GUI, partindo das entradas | Abrir o Manifest e percorrer cada uma das 9 entradas expostas até achar o TrustManager: dezenas de ações. |
+| JADX Atlas | 1) aba Caminhos; 2) buscar com a entrada sugerida (ou percorrer as entradas no seletor); 3) clicar nos passos para ver a evidência. **3 ações**, e o achado já aparece no painel Achados sem que se saiba o que procurar. |
+
+**Limitações honestas:** a cadeia foi plantada por mim, num app pequeno. Em apps reais, as arestas `uses` dão muitos caminhos plausíveis mas irrelevantes (o limite de expansões e a ordenação reduzem, mas não eliminam). Falta a validação com um app de CTF.

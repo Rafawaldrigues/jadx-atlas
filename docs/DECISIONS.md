@@ -122,3 +122,22 @@ Fonte: `frameworks/base/core/java/com/android/internal/pm/pkg/component/` (branc
 - **Constantes:** `static final String` literais da própria classe, das classes que a envolvem e de outras classes do projeto (`Actions.GO`, resolvido pelos imports). O `javac` já embute constantes do framework como literais, e é isso que o JADX mostra.
 - **Marcadores:** `readsIntent` em classes com papel de componente que chamam `getIntent()`; `deepLinkHandler` em componentes com deep link no Manifest. São só marcadores, não análise de fluxo.
 - `PendingIntent.getActivity/getService/getBroadcast/getForegroundService` só contam quando o receptor é `PendingIntent`, o que evita confusão com `Fragment.getActivity()`.
+
+## D-020 · Arestas `uses` compactas e fora do payload (Fase 5)
+
+- **Definição:** criação de objeto, chamada estática (`Tipo.metodo()`) e tipo declarado de variável local ou campo que resolva (pelo mesmo `resolve()`) para uma classe do projeto. Parâmetros, tipos de retorno e casts ficam de fora: dobravam o volume e o custo sem acrescentar muito aos caminhos.
+- **Armazenamento:** listas de adjacência (`FlowGraph`) no servidor, com a primeira linha de cada referência como evidência. O payload só leva `stats.usesEdges`; os vizinhos chegam por `GET /api/uses?id=` e os caminhos por `GET /api/paths`.
+- **Custo:** a extração usa **uma** query do tree-sitter com predicados `#any-of?` (os nomes irrelevantes de método são descartados antes do Python) e um pré-filtro de strings sobre bytes. No AndroidX decompilado (2.032 tipos), a indexação com regras, Intents e `uses` fica em ~1,7 s, contra ~0,95 s sem (docs/PERFORMANCE.md).
+
+## D-021 · Busca de caminhos (Fase 5)
+
+- BFS de caminhos simples (sem repetir nó, então ciclos não travam), com os mais curtos primeiro e limites: `maxDepth` (padrão 6, máximo 10), 3 caminhos por alvo, 30 no total, 2 s de tempo e 3 expansões por nó (o que evita explosão combinatória em grafos densos). Os vizinhos são ordenados por tipo de aresta (`launches` < `sends_action` < `registers_receiver` < `uses` < `extends`) e por id, e o resultado final pelo comprimento, confiança e sequência: **ordem determinística**.
+- Um alvo encerra o caminho. Um caminho com a mesma sequência de classes que outro já encontrado (por exemplo, por `uses` depois de `launches`) é descartado.
+- A confiança do caminho é a da aresta mais fraca. Todo resultado traz `approximate: true` e a nota "caminho possível; não é prova de alcançabilidade nem de exploração".
+- **Entradas padrão:** componentes exportados (inclusive potencialmente), quem trata deep link e a classe Application. **Alvos padrão:** classes com achado `medium` ou `high`. Subir por `extends` é opcional (padrão ligado), porque código herdado roda como a subclasse.
+
+## D-022 · Critério de aceite com cadeia plantada em vez de APK de CTF (Fase 5)
+
+- **Contexto:** o critério pede um APK de CTF com vulnerabilidade conhecida. Baixar um APK de terceiros exige conferir a licença e a autorização de uso.
+- **Decisão:** acrescentei ao app sintético próprio (`tests/apk/testapp`) uma cadeia conhecida: `DeepLinkActivity` (exportada por deep link) → `PaymentActivity` (não exportada) → `InsecureClient` (TrustManager anônimo que aceita tudo). A conferência automática está em `tests/test_jadx_integration.py`. **Pendente:** repetir com um app de CTF e registrar em docs/VALIDATION.md.
+- Essa validação revelou um bug real: o JADX escreve `new Intent(this, (Class<?>) X.class)`, e o cast não era desembrulhado. Corrigido, com teste de regressão.
