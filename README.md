@@ -63,6 +63,10 @@ Receptores de outro tipo são descartados. O código de classes anônimas é atr
 
 O Atlas liga telas e componentes pelas chamadas de Intent: `startActivity`, `startService`, `bindService`, `sendBroadcast`, `PendingIntent.get*` e `registerReceiver`, com alvos por `X.class`, `setClassName`, `setComponent` ou ação implícita casada com os `intent-filter` do Manifest. O fluxo é **só dentro do método**, sem análise entre métodos. Intents que não dá para rastrear (ação dinâmica, Intent vindo de outro método) aparecem como "não resolvidos", com o motivo, e nunca viram uma aresta inventada. No mapa, escolha a camada **Herança**, **Intents** ou **Todas**.
 
+## Caminhos possíveis
+
+A aba **Caminhos** procura, a partir de uma entrada exposta (componente exportado, deep link, Application), rotas até classes com candidato a achado, seguindo arestas de Intent, referências de tipo (`uses`: criação de objeto, chamada estática, tipo de variável) e, opcionalmente, herança. São os caminhos mais curtos primeiro, com limites de profundidade, quantidade e tempo, ordem determinística e evidência (arquivo:linha) em cada passo. **É um caminho possível, não prova de alcançabilidade nem de exploração.** Também existe em `GET /api/paths?entry=<classe>&target=<classe>&maxDepth=6`.
+
 ## Explorar
 
 - **Busca**: localiza pelo nome da classe, nome completo, pacote ou caminho do arquivo. Atalho `/`.
