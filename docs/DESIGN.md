@@ -105,7 +105,7 @@ Rules follow the AOSP component parsers (`frameworks/base/core/java/com/android/
   the tests by a small validator (`tests/schema_check.py`) instead of an extra dependency. The absolute
   import path is never exported.
 - `--anonymize` replaces the app's packages, classes, file names and URL hosts with deterministic
-  identifiers. SARIF is not implemented yet: validating it against the official schema would need a new
+  identifiers. There is no SARIF output: validating it against the official schema would need a new
   dependency.
 
 ## Obfuscated code
@@ -128,8 +128,8 @@ Rules follow the AOSP component parsers (`frameworks/base/core/java/com/android/
   data file; it is gzipped JSON (never pickle, so a cache file cannot execute code) in the user cache
   directory, never inside the analysed folder.
 - `/api/project` refuses payloads above `ATLAS_MAX_PAYLOAD_MB` (150 by default) and points to the on-demand
-  routes (`/api/summary`, `/api/list`, `/api/neighbors`, `/api/search`). The UI does not yet have a
-  neighbourhood-only mode for projects above that limit.
+  routes (`/api/summary`, `/api/list`, `/api/neighbors`, `/api/search`); the UI does not load those
+  projects.
 
 ## Security of the tool
 

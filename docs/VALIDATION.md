@@ -112,4 +112,4 @@ TrustManager becomes class `a.a`; Atlas still finds `DeepLinkActivity → Paymen
 
 - The test app is small and the vulnerable chain was planted on purpose. On real apps, `uses` edges
   produce many plausible but irrelevant paths; the expansion limit and ordering reduce, but do not remove, them.
-- Validation on a real third-party app (an open-source app or a CTF app whose licence allows it) is still pending.
+- The real-code check above uses libraries, not a complete third-party app with known vulnerabilities.

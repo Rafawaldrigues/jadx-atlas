@@ -42,7 +42,7 @@ Atlas complements these tools rather than replacing them:
 |---|---|---|
 | [MobSF](https://github.com/MobSF/Mobile-Security-Framework-MobSF) | All-in-one static and dynamic analysis with a broad set of checks and reports, starting from the APK. | A navigable map of the decompiled code: findings tied to inheritance roles, Intent edges and paths from the exposed entry, with explicit confidence levels. Lightweight: works from an existing JADX export, no services to run. |
 | [Drozer](https://github.com/WithSecureLabs/drozer) | Interacting with exported components on a device or emulator (sending Intents, querying providers). | Static and offline. It tells you which components, deep links and paths are worth trying with Drozer. |
-| JADX GUI and plugins such as `jadx-type-diagram-plugin` | Decompilation, code search and (with the plugin) type diagrams inside JADX. | Manifest-aware attack surface, roles through obfuscation, rule-based finding candidates, an Intent graph, version diffs and exportable reports. |
+| [JADX](https://github.com/skylot/jadx) GUI and its plugins | Decompilation, code navigation and search inside JADX. | Manifest-aware attack surface, roles through obfuscation, rule-based finding candidates, an Intent graph, version diffs and exportable reports. |
 
 ## How it works
 
@@ -198,7 +198,7 @@ the browser; the CLI and the on-demand API (`/api/list`, `/api/neighbors`, `/api
 - Not analysed: native code, original Kotlin, Smali, resources other than the manifest, split APKs (only
   the base manifest) and run-time behaviour. Reflection and dynamic code loading hide real flows.
 - Inherited member types and some complex import/scope cases may stay unresolved; they are marked as such.
-- The UI does not yet have a neighbourhood-only mode for projects above the payload limit.
+- Projects above the payload limit can only be explored through the CLI and the on-demand API, not in the UI.
 
 ## Command-line reference
 
@@ -234,11 +234,6 @@ Layout:
 - `scripts/`: generators and tools; `tests/`: tests; `docs/`: design notes, validation, schema.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and the [CHANGELOG](CHANGELOG.md).
-
-## Roadmap
-
-- Validate on more real apps (open-source and CTF apps whose licences allow it).
-- SARIF output, a neighbourhood-only UI mode for very large apps, UI translations.
 
 ## Author and licence
 
