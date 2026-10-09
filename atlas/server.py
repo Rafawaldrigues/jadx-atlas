@@ -10,6 +10,7 @@ import threading
 from urllib.parse import parse_qs, urlparse
 import webbrowser
 
+from . import diff as diff_module
 from .indexer import Cancelled, Project
 
 # Package directory: holds web/ (static UI) and examples/ (demo project).
@@ -20,15 +21,26 @@ class State:
     def __init__(self, initial=None):
         self.lock = threading.Lock()
         self.project = initial
+        # Second slot for "compare with another version" (phase 6): at most two projects in memory.
+        self.compare = None
         self.cancel = threading.Event()
-        self.status = {"busy": False, "done": 0, "total": 0, "message": "Pronto", "error": None, "revision": 0}
+        self.status = {
+            "busy": False,
+            "done": 0,
+            "total": 0,
+            "message": "Pronto",
+            "error": None,
+            "revision": 0,
+            "compareRevision": 0,
+            "target": "project",
+        }
 
-    def start(self, path, demo=False, manifest=None):
+    def start(self, path, demo=False, manifest=None, slot="project"):
         with self.lock:
             if self.status["busy"]:
                 raise ValueError("Uma importação já está em andamento.")
             self.cancel.clear()
-            self.status.update(busy=True, done=0, total=0, message="Procurando arquivos .java", error=None)
+            self.status.update(busy=True, done=0, total=0, message="Procurando arquivos .java", error=None, target=slot)
 
         def progress(done, total, message):
             with self.lock:
@@ -40,8 +52,13 @@ class State:
                 with self.lock:
                     if self.cancel.is_set():
                         raise Cancelled()
-                    self.project = project
-                    self.status["revision"] += 1
+                    if slot == "compare":
+                        self.compare = project
+                        self.status["compareRevision"] += 1
+                    else:
+                        self.project = project
+                        self.compare = None  # a diff against an older import would be misleading
+                        self.status["revision"] += 1
                     self.status.update(message="Análise concluída", error=None)
             except Cancelled:
                 with self.lock:
@@ -115,6 +132,20 @@ class Handler(SimpleHTTPRequestHandler):
                     raise ValueError("Importe um projeto primeiro.")
                 class_id = parse_qs(url.query).get("id", [""])[0]
                 return self.json(self.state.project.source(class_id))
+            if url.path == "/api/diff":
+                with self.state.lock:
+                    current, other = self.state.project, self.state.compare
+                if not current or not other:
+                    raise ValueError("Importe a outra versão primeiro (Comparar com outra versão).")
+                query = parse_qs(url.query)
+                other_is_old = query.get("otherIs", ["old"])[0] != "new"
+                old, new = (other, current) if other_is_old else (current, other)
+                result = diff_module.diff(old, new)
+                if query.get("format", ["json"])[0] == "md":
+                    return self.json(
+                        {"markdown": diff_module.render_markdown(result, old.payload["name"], new.payload["name"])}
+                    )
+                return self.json({"old": old.payload["name"], "new": new.payload["name"], **result})
             if url.path in {"/api/paths", "/api/uses"}:
                 if not self.state.project:
                     raise ValueError("Importe um projeto primeiro.")
@@ -162,6 +193,13 @@ class Handler(SimpleHTTPRequestHandler):
                 if manifest is not None and not isinstance(manifest, str):
                     raise ValueError("O campo manifest deve ser um caminho.")
                 self.state.start(root.strip(), manifest=(manifest or "").strip() or None)
+            elif path == "/api/compare":
+                root = body.get("path")
+                if not isinstance(root, str) or not root.strip():
+                    raise ValueError("Informe o caminho da outra exportação.")
+                if not self.state.project:
+                    raise ValueError("Importe um projeto primeiro.")
+                self.state.start(root.strip(), slot="compare")
             elif path == "/api/demo":
                 self.state.start(BASE / "examples" / "pedidos", demo=True)
             elif path == "/api/cancel":
