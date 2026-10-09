@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import tempfile
 import time
@@ -5,6 +6,17 @@ import unittest
 
 from atlas.indexer import Project
 from atlas.manifest import ManifestError, class_id, load, locate, parse_manifest, qualify
+
+
+def can_symlink():
+    """Windows without developer mode cannot create symlinks; those tests are skipped there."""
+    with tempfile.TemporaryDirectory() as directory:
+        try:
+            os.symlink(os.path.join(directory, "target"), os.path.join(directory, "link"))
+            return True
+        except (OSError, NotImplementedError):
+            return False
+
 
 NS = 'xmlns:android="http://schemas.android.com/apk/res/android"'
 
@@ -289,6 +301,7 @@ class ProjectIntegrationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "não encontrado"):
             Project(root, manifest=root / "nope.xml")
 
+    @unittest.skipUnless(can_symlink(), "o sistema não permite criar links simbólicos")
     def test_symlinked_manifest_is_ignored(self):
         root = self.make({"A.java": "class A {}", "real.xml": manifest("")})
         (root / "AndroidManifest.xml").symlink_to(root / "real.xml")
