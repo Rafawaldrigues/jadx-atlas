@@ -104,6 +104,9 @@ As setas saem da classe/interface filha e apontam para o tipo pai. Relações `i
 
 ## Projetos grandes
 
+A indexação usa vários processos a partir de 300 arquivos (`--workers N` ajusta, `--workers 1` desliga) e guarda um cache em disco por arquivo (`~/.cache/jadx-atlas`, desligue com `--no-cache`). Medidas em [docs/PERFORMANCE.md](docs/PERFORMANCE.md); `python scripts/bench.py` repete o benchmark.
+
+
 O índice inclui todas as declarações recuperáveis. A lista carrega 200 resultados por vez. O mapa desenha **até 600 nós por visualização** para manter a navegação utilizável; quando esse limite é atingido, o rodapé informa o total omitido. Use busca, filtro de pacote e foco para acessar as demais classes. A exportação JSON contém o índice completo, independentemente do recorte visível. Recortes grandes (mais de 120 nós ou 350 relações) usam uma grade compacta; recortes menores usam disposição hierárquica. O foco começa com um nível e permite expandir.
 
 Arquivos maiores que 8 MiB são ignorados com aviso. Links simbólicos, `.git`, `node_modules` e `.venv` são ignorados na busca. Os arquivos Java são lidos como UTF-8, substituindo bytes inválidos. A pasta original não é modificada. Se um arquivo mudar depois da análise, é necessário reimportar antes de abrir seu código.
