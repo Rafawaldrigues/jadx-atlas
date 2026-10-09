@@ -1,0 +1,5 @@
+# Keep LF everywhere: golden files and fixtures are compared byte for byte on every OS.
+* text=auto eol=lf
+*.apk binary
+*.jar binary
+*.png binary

@@ -16,6 +16,17 @@ from atlas.server import BASE
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from schema_check import errors  # noqa: E402
 
+
+def can_symlink():
+    """Windows without developer mode cannot create symlinks; those tests are skipped there."""
+    with tempfile.TemporaryDirectory() as directory:
+        try:
+            os.symlink(os.path.join(directory, "target"), os.path.join(directory, "link"))
+            return True
+        except (OSError, NotImplementedError):
+            return False
+
+
 SCHEMA = json.loads(
     (Path(__file__).resolve().parents[1] / "docs" / "schema" / "atlas-index.schema.json").read_text(encoding="utf-8")
 )
@@ -98,6 +109,7 @@ class SecretsAndApkTests(unittest.TestCase):
             self.assertIn("AKIAQWERTYUIOPASDFGH", render_markdown(included))
             self.assertEqual(included["report"]["secrets"], "incluídos (--include-secrets)")
 
+    @unittest.skipUnless(can_symlink(), "o sistema não permite criar links simbólicos")
     def test_apk_hash_only(self):
         with tempfile.TemporaryDirectory() as directory:
             apk = Path(directory, "app.apk")

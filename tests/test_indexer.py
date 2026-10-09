@@ -1,8 +1,19 @@
+import os
 from pathlib import Path
 import tempfile
 import unittest
 
 from atlas.indexer import MAX_FILE_BYTES, Cancelled, Project, parse_file
+
+
+def can_symlink():
+    """Windows without developer mode cannot create symlinks; those tests are skipped there."""
+    with tempfile.TemporaryDirectory() as directory:
+        try:
+            os.symlink(os.path.join(directory, "target"), os.path.join(directory, "link"))
+            return True
+        except (OSError, NotImplementedError):
+            return False
 
 
 class IndexerTests(unittest.TestCase):
@@ -167,6 +178,7 @@ class IndexerTests(unittest.TestCase):
             with self.assertRaises(Cancelled):
                 Project(root, cancelled=lambda: True)
 
+    @unittest.skipUnless(can_symlink(), "o sistema não permite criar links simbólicos")
     def test_oversized_and_symlinked_sources_are_skipped(self):
         p = self.project({"A.java": "class A {}"})
         (p.root / "Link.java").symlink_to(p.root / "A.java")
