@@ -5,12 +5,12 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import __version__, diff, server
+from . import __version__, diff, report, server
 
-# `export` joins this table in phase 7.
 COMMANDS = {
     "serve": (server.add_arguments, server.serve, "Abre a interface local (padrão)"),
     "diff": (diff.add_arguments, diff.run, "Compara a superfície de ataque de duas exportações"),
+    "export": (report.add_arguments, report.run, "Gera relatório (md) ou índice (json) de uma exportação"),
 }
 
 
