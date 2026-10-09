@@ -96,6 +96,14 @@ function matchesSurface(node) {
 async function loadProject() {
   const project = await api('/api/project');
   if (!project) return;
+  if (project.tooLarge) {
+    // Phase 9 guard: the browser would freeze on this payload; the on-demand routes and the CLI still work.
+    $('#project-name').textContent = project.summary.name;
+    $('#surface-banner').hidden = false;
+    $('#surface-banner').textContent = `${project.message} (${Math.round(project.payloadBytes / 1048576)} MB; limite ajustável com ATLAS_MAX_PAYLOAD_MB).`;
+    $('#visible-count').textContent = `${project.summary.stats.types.toLocaleString('pt-BR')} tipos indexados`;
+    return;
+  }
   state.project = project;
   state.nodes = new Map(project.nodes.map(n => [n.id, n]));
   state.incoming = new Map(); state.outgoing = new Map();
