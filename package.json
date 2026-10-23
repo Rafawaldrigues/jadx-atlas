@@ -9,7 +9,7 @@
     "check": "node --check atlas/web/app.js && node --check atlas/web/logic.js && node --test 'tests/web/*.test.js'"
   },
   "dependencies": {
-    "cytoscape": "^3.34.3",
+    "cytoscape": "^3.34.4",
     "cytoscape-dagre": "^4.0.1"
   }
 }
