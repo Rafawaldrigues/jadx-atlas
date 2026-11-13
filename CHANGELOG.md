@@ -7,7 +7,7 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - `tree-sitter` 0.26.1 is supported (`>=0.25.2,<0.27`, excluding 0.26.0, which crashes on real JADX output).
-- Cytoscape.js 3.35.0; ruff 0.17.5 for development.
+- Cytoscape.js 3.35.0 and cytoscape-dagre 4.1.0; ruff 0.17.5 for development.
 
 ### Fixed
 - Unresolved Intents are sorted by line before the 50-item cap, so the index no longer depends on the
