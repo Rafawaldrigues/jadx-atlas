@@ -10,6 +10,6 @@
   },
   "dependencies": {
     "cytoscape": "^3.35.0",
-    "cytoscape-dagre": "^4.0.1"
+    "cytoscape-dagre": "^4.1.0"
   }
 }
