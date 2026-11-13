@@ -887,6 +887,10 @@ class Project:
                     }
                 )
             if unresolved:
+                # Query match order is not guaranteed across tree-sitter versions: sort before truncating.
+                unresolved.sort(
+                    key=lambda item: (item.get("line", 0), *(str(item.get(k, "")) for k in ("via", "text", "reason")))
+                )
                 node["intents"] = {"unresolved": unresolved[:50], "unresolvedTotal": len(unresolved)}
             component = node.get("component")
             if component and component.get("deepLinks"):
